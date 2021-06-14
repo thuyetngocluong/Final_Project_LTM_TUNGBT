@@ -7,6 +7,7 @@ THUYET LUONG NGOC <br/>
 TUAN NGUYEN MINH <br/>  
 ANH NGUYEN HONG <br/>  
 # Protocol
+## SEND FROM CLIENT 
 ### 1. LOGIN
 |Command|OpCode|Use By|
 |---|---|---|
@@ -112,46 +113,47 @@ ANH NGUYEN HONG <br/>
 |RES_CHAT_SUCCESSFUL|800|
 |RES_CHAT_FAIL|801|
 
-### 11. BROADCAST SEND LIST FRIEND 
+## SEND FROM SERVER
+### 1. SEND LIST FRIEND 
 |Command|OpCode|Use By|
 |---|---|---|
-|BROADCAST_SEND_LIST|29|Server|
+|SERVER_SEND_LIST|29|Server|
 
-### 12. BROADCAST CHALLENGE
+### 12. SEND CHALLENGE
 |Command|OpCode|Use By|
 |---|---|---|
-|BROADCAST_SEND_CHALLENGE|28|Server|
+|SERVER_SEND_CHALLENGE|28|Server|
 
 |Command|ResponseCode|Use By|
 |---|---|---|
-|RES_ACCEPT_CHALLENGE|280|Client|
-|RES_DENY_CHALLENGE|281|Client|
+|REQ_ACCEPT_CHALLENGE|280|Client|
+|REQ_DENY_CHALLENGE|281|Client|
 
-### 13. BROADCAST CHALLENGE ACCEPTED DENIED
+### 13. SEND CHALLENGE ACCEPTED/DENIED
 |Command|OpCode|Use By|
 |---|---|---|
-|BROADCAST_CHALLENGE_ACCEPTED|22|Server|
-|BROADCAST_CHALLENGE_DENIED|23|Server|
+|SERVER_SEND_CHALLENGE_ACCEPTED|23|Server|
+|SERVER_SEND_CHALLENGE_DENIED|24|Server|
 
-### 14. BROADCAST START GAME
+### 14. SEND START GAME
 |Command|OpCode|Use By|
 |---|---|---|
-|BROADCAST_START_GAME|30|Server|
+|SERVER_START_GAME|30|Server|
 
-### 15. BROADCAST PLAY 
+### 15. SEND PLAY 
 |Command|OpCode|Use By|
 |---|---|---|
-|BROADCAST_PLAY|89|Server|
+|SERVER_SEND_PLAY|39|Server|
 
-### 15. BROADCAST RESULT 
+### 15. SEND RESULT 
 |Command|OpCode|Use By|
 |---|---|---|
-|BROADCAST_RESULT|89|Server|
+|SERVER_SEND_RESULT|70|Server|
 
-### 16. BROADCAST CHAT 
+### 16. SEND CHAT 
 |Command|OpCode|Use By|
 |---|---|---|
-|BROADCAST_CHAT|89|Server|
+|SERVER_SEND_CHAT|890|Server|
 
 # Description
 Game có các chức năng:__
@@ -187,7 +189,7 @@ Game có các chức năng:__
 2. Server xử lý và gửi lại một trong các thông điệp:
     - **RES_GET_LIST_SUCCESSFUL**
     - **RES_GET_LIST_FAIL**
-3. Client có thể  lấy danh sách bằng lệnh **BROADCAST_SEND_LIST** từ server
+3. Client có thể  lấy danh sách bằng lệnh **SERVER_SEND_LIST** từ server
 ### Với chức năng GỬI LỜI MỜI KẾT BẠN
 1. Client có thể yêu cầu kết bạn bằng request **REQ_ADD_FRIEND**
 2. Server xử lý và gửi lại một trong các thông điệp:
@@ -195,14 +197,14 @@ Game có các chức năng:__
     - **RES_ADD_FRIEND_FAIL**
 ### Với chức năng CHƠI GAME
 1. Client1 gửi yêu cầu thách đấu đến một đối thủ bằng request **REQ_CHALLENGE**
-2. Server sẽ gửi yêu cầu chấp nhận thách đấu đến Client2 bằng request **BROADCAST_SEND_CHALLENGE**
+2. Server sẽ gửi yêu cầu chấp nhận thách đấu đến Client2 bằng request **SERVER_SEND_CHALLENGE**
 3. Client2 sẽ thông điệp trả lời có hoặc không:
-    - **RES_ACCEPCT_CHALLENGE**
-    - **RES_DENY_CHALLENGE**
+    - **REQ_ACCEPCT_CHALLENGE**
+    - **REQ_DENY_CHALLENGE**
 4. Sau đó Server sẽ gửi broadcast đến Client1 với thông điệp tuỳ thuộc vào Client trả lời thế nào:
-    - **BROADCAST_CHALLENGE_ACCEPTED**
-    - **BROADCAST_CHALLENGE_DENIED**
-5. Nếu cả hai đồng ý, Server tiến hành gửi broad cast **BROADCAST_START_GAME**
+    - **SERVER_SEND_CHALLENGE_ACCEPTED**
+    - **SERVER_SEND_CHALLENGE_DENIED**
+5. Nếu cả hai đồng ý, Server tiến hành gửi broad cast **SERVER_SEND_START_GAME**
 6. Hai bên tiến hành chơi và gửi các thông điệp **REQ_PLAY**
-7. Server sẽ xử lý, gửi lại broad cast cho 2 bên tham gia **BROADCAST_PLAY**
-8. Nếu game kết thúc hoặc client gửi yêu cầu dừng game **REQ_STOP_MATCH**, server sẽ gửi kết quả **BROADCAST_RESULT**
+7. Server sẽ xử lý, gửi lại broad cast cho 2 bên tham gia **SERVER_SEND_PLAY**
+8. Nếu game kết thúc hoặc client gửi yêu cầu dừng game **REQ_STOP_MATCH**, server sẽ gửi kết quả **SERVER_SEND_RESULT**
