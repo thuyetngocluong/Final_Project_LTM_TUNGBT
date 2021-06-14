@@ -7,6 +7,17 @@ THUYET LUONG NGOC <br/>
 TUAN NGUYEN MINH <br/>  
 ANH NGUYEN HONG <br/>  
 # Protocol
+## Thông điệp yêu cầu
+|Opcode<2byte>|Content|\r\n|
+|---|---|---|
+## Thông điệp trả lời
+|90|OpCode yêu cầu|Trạng thái lỗi| Nội dung|\r\n|
+|---|---|---|---|---|
+
+Ví dụ
+|90|OpCode yêu cầu|Trạng thái lỗi| Nội dung|\r\n|
+|---|---|---|---|---|
+|90|10|0||\r\n|
 ## SEND FROM CLIENT 
 ### 1. LOGIN
 |Command|OpCode|Use By|
