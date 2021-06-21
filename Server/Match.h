@@ -2,6 +2,10 @@
 
 #define BOARD_WIDTH 32
 #define BOARD_HEIGHT 32
+#define STREAK_TO_WIN 5
+
+#define WIN true
+#define NOT_WIN false
 
 #include "Account.h"
 
@@ -17,26 +21,28 @@ struct Match {
 		this->ySock = _ySock;
 	}
 
-	void xPlay(int _x, int _y) {
+	bool xPlay(int _x, int _y) {
 		board[_x][_y] = 'x';
+		return winCheck('x', _x, _y);
 	}
 
-	void oPlay(int _x, int _y) {
+	bool oPlay(int _x, int _y) {
 		board[_x][_y] = 'o';
+		return winCheck('o', _x, _y);
 	}
 
-	bool winCheck(char c, int _x, int _y) {
-		return fiveInARow(c, _x, _y) || fiveInACol(c, _x, _y) || fiveInAPrimaryDiagon(c, _x, _y) || fiveInASubDiagon(c, _x, _y);
+	private: bool winCheck(char c, int _x, int _y) {
+		return checkRow(c, _x, _y) || checkCol(c, _x, _y) || checkPrimaryDiagon(c, _x, _y) || checkSubDiagon(c, _x, _y);
 	}
 
-	private: bool fiveInARow(char c, int _x, int _y) {
+	private: bool checkRow(char c, int _x, int _y) {
 		int count = 1;
 		int right = _y + 1;
 		int left = _y - 1;
 		while (right < BOARD_HEIGHT) {
 			if (this->board[_x][right] == c) {
 				count++;
-				if (count >= 5) return true;
+				if (count >= STREAK_TO_WIN) return true;
 			}
 			else break;
 			right++;
@@ -45,7 +51,7 @@ struct Match {
 		while (left >= 0) {
 			if (this->board[_x][left] == c) {
 				count++;
-				if (count >= 5) return true;
+				if (count >= STREAK_TO_WIN) return true;
 			}
 			else break;
 			left--;
@@ -53,14 +59,14 @@ struct Match {
 		return false;
 	}
 	
-	private: bool fiveInACol(char c, int _x, int _y) {
+	private: bool checkCol(char c, int _x, int _y) {
 		int count = 1;
 		int up = _x - 1;
 		int down = _x + 1;
 		while (up >= 0) {
 			if (this->board[up][_y] == c) {
 				count++;
-				if (count >= 5) return true;
+				if (count >= STREAK_TO_WIN) return true;
 			}
 			else break;
 			up++;
@@ -69,7 +75,7 @@ struct Match {
 		while (down < BOARD_HEIGHT) {
 			if (this->board[down][_y] == c) {
 				count++;
-				if (count >= 5) return true;
+				if (count >= STREAK_TO_WIN) return true;
 			}
 			else break;
 			down--;
@@ -78,13 +84,13 @@ struct Match {
 		return false;
 	}
 
-	private: bool fiveInAPrimaryDiagon(char c, int _x, int _y) {
+	private: bool checkPrimaryDiagon(char c, int _x, int _y) {
 		int count = 1;
 		int delta_diagon = 1;
 		while (_x - delta_diagon >= 0 && _y - delta_diagon >= 0) {
 			if (this->board[_x - delta_diagon][_y - delta_diagon] == c) {
 				count++;
-				if (count >= 5) return true;
+				if (count >= STREAK_TO_WIN) return true;
 			}
 			else break;
 			delta_diagon++;
@@ -94,7 +100,7 @@ struct Match {
 		while (_x + delta_diagon < BOARD_WIDTH && _y + delta_diagon < BOARD_HEIGHT) {
 			if (this->board[_x + delta_diagon][_y + delta_diagon] == c) {
 				count++;
-				if (count >= 5) return true;
+				if (count >= STREAK_TO_WIN) return true;
 			}
 			else break;
 			delta_diagon++;
@@ -102,13 +108,13 @@ struct Match {
 		return false;
 	}
 
-	private: bool fiveInASubDiagon(char c, int _x, int _y) {
+	private: bool checkSubDiagon(char c, int _x, int _y) {
 		int count = 1;
 		int delta_diagon = 1;
 		while (_x + delta_diagon < BOARD_WIDTH && _y - delta_diagon >= 0) {
 			if (this->board[_x + delta_diagon][_y - delta_diagon] == c) {
 				count++;
-				if (count >= 5) return true;
+				if (count >= STREAK_TO_WIN) return true;
 			}
 			else break;
 			delta_diagon++;
@@ -118,7 +124,7 @@ struct Match {
 		while (_x + delta_diagon >= 0 && _y + delta_diagon < BOARD_HEIGHT) {
 			if (this->board[_x - delta_diagon][_y + delta_diagon] == c) {
 				count++;
-				if (count >= 5) return true;
+				if (count >= STREAK_TO_WIN) return true;
 			}
 			else break;
 			delta_diagon++;

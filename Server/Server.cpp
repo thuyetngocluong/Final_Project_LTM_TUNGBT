@@ -17,6 +17,7 @@
 #include <iostream>
 #include <sstream>
 #include <filesystem>
+#include <utility>
 
 using std::map;
 using std::string;
@@ -24,6 +25,7 @@ using std::ifstream;
 using std::ofstream;
 using std::stringstream;
 using std::ios;
+using std::pair;
 
 #include "Utilities.h"
 #include "Message.h"
@@ -65,22 +67,24 @@ void				unlock(HANDLE&);
 Message				login(SOCKET&, Message&);
 Message				logout(SOCKET&, Message&);
 Message				getList(SOCKET&, Message&);
-Message				addFriend(SOCKET&, Message&);
-Message				challenge(SOCKET&, Message&);
-Message				acceptChallenge(SOCKET&, Message&);
-Message				denyChallenge(SOCKET&, Message&);
-Message				startMatch(SOCKET&, Message&);
-Message				stopMatch(SOCKET&, Message&);
-Message				play(SOCKET&, Message&);
+Message				sendFriendInvitation(SOCKET&, Message&);
+Message				sendChallengeInvitation(SOCKET&, Message&);
 Message				getLog(SOCKET&, Message&);
 Message				chat(SOCKET&, Message&);
 
-Message				solveRequest(Account*, Message&);
+Message				stopMatch(SOCKET&, Message&);
+Message				play(SOCKET&, Message&);
+void				startGame(Match *match);
+void				endGame(Match *match);
+
+Message				solveRequest(SOCKET&, Message&);
+
 void				processAccount(Account*);
 unsigned __stdcall	serverWorkerThread(LPVOID CompletionPortID);
 
 
 map<SOCKET, Account*> mapAccounts;
+map<pair<SOCKET, SOCKET>, Match*> mapMatch;
 
 
 int _tmain(int argc, _TCHAR* argv[])
@@ -216,6 +220,8 @@ unsigned __stdcall serverWorkerThread(LPVOID completionPortID)
 		if (mapAccounts.find(perHandleData->socket) == mapAccounts.end()) continue;
 		account = mapAccounts.at(perHandleData->socket);
 		lock(account->mutex);
+
+
 		// Check to see if an error has occurred on the socket and if so
 		// then close the socket and cleanup the SOCKET_INFORMATION structure
 		// associated with the socket
@@ -243,7 +249,7 @@ unsigned __stdcall serverWorkerThread(LPVOID completionPortID)
 		if (!account->requests.empty() && perIoData->recvBytes <= perIoData->sentBytes) {
 			request = account->requests.front();
 			account->requests.pop();
-			response = solveRequest(account, request);
+			response = solveRequest(perHandleData->socket, request);
 
 			string tmp = response.toMessageSend();
 
@@ -326,6 +332,17 @@ void unlock(HANDLE &mutex) {
 	ReleaseMutex(mutex);
 }
 
+
+SOCKET findSocket(string username) {
+	for (auto i = mapAccounts.begin(); i != mapAccounts.end(); i++) {
+		if (i->second->username.compare(username) == 0) {
+			return i->first;
+		}
+	}
+
+	return NULL;
+}
+
 /**
 * @function deleteAccount: delete account and socket
 * @param socket: socket need to delete
@@ -350,14 +367,14 @@ void deleteAccount(SOCKET &socket) {
 **/
 Message login(SOCKET &socket, Message &request) {
 	Account *account = mapAccounts[socket];
-	Message response(RESPONSE, reform(RES_UNDENTIFY_RESULT, SIZE_RESPONSE_CODE));
+	Message response(RESPONSE_TO_CLIENT, reform(UNDENTIFIED, SIZE_RESPONSE_CODE));
 
 	int statusAccount = getStatus(request);
 
 	//if the account already logged 
 	if (account->signInStatus == LOGGED) {
-		saveLog(account, request, RES_LOGIN_FAIL_ALREADY_LOGIN);
-		response.content = std::to_string(RES_LOGIN_FAIL_ALREADY_LOGIN);
+		saveLog(account, request, LOGIN_FAIL_LOGGED);
+		response.content = reform(LOGIN_FAIL_LOGGED, SIZE_RESPONSE_CODE);
 		return response;
 	}
 
@@ -366,18 +383,18 @@ Message login(SOCKET &socket, Message &request) {
 	case ACTIVE:
 		account->username = request.content;
 		account->signInStatus = LOGGED;
-		saveLog(account, request, RES_LOGIN_SUCCESSFUL);
-		response.content = std::to_string(RES_LOGIN_SUCCESSFUL);
+		saveLog(account, request, LOGIN_SUCCESSFUL);
+		response.content = reform(LOGIN_SUCCESSFUL, SIZE_RESPONSE_CODE);
 		break;
 
 	case LOCKED:
-		saveLog(account, request, RES_LOGIN_FAIL_LOCKED);
-		response.content = std::to_string(RES_LOGIN_FAIL_LOCKED);
+		saveLog(account, request, LOGIN_FAIL_LOCKED);
+		response.content = reform(LOGIN_FAIL_LOCKED, SIZE_RESPONSE_CODE);
 		break;
 
 	case NOT_EXIST:
-		saveLog(account, request, RES_LOGIN_FAIL_NOT_EXIST);
-		response.content = std::to_string(RES_LOGIN_FAIL_NOT_EXIST);
+		saveLog(account, request, LOGIN_FAIL_WRONG);
+		response.content = reform(LOGIN_FAIL_WRONG, SIZE_RESPONSE_CODE);
 		break;
 	}
 
@@ -396,95 +413,88 @@ Message login(SOCKET &socket, Message &request) {
 **/
 Message logout(SOCKET &socket, Message &request) {
 	Account *account = mapAccounts[socket];
-	Message response(RESPONSE, reform(RES_UNDENTIFY_RESULT, SIZE_RESPONSE_CODE));
+	Message response(RESPONSE_TO_CLIENT, reform(UNDENTIFIED, SIZE_RESPONSE_CODE));
 
 	if (account->signInStatus == NOT_LOGGED) {
-		response.content = std::to_string(RES_LOGOUT_FAIL);
-		saveLog(account, request, RES_LOGOUT_FAIL);
+		response.content = reform(UNDENTIFIED, LOGOUT_FAIL);
+		saveLog(account, request, LOGOUT_FAIL);
 	}
 	else {
 		account->signInStatus = NOT_LOGGED;
-		response.content = std::to_string(RES_LOGOUT_SUCCESSFUL);
-		saveLog(account, request, RES_LOGOUT_SUCCESSFUL);
+		response.content = reform(UNDENTIFIED, LOGOUT_SUCCESSFUL);
+		saveLog(account, request, LOGOUT_SUCCESSFUL);
 	}
 
 	return response;
 }
 
+
+/**Solve Register Account request**/
+Message registerAccount(SOCKET &socket, Message &request) {
+	Account *account = mapAccounts[socket];
+	Message response(RESPONSE_TO_CLIENT, reform(UNDENTIFIED, SIZE_RESPONSE_CODE));
+
+	if (registerAccount(request)) {
+		response.content = reform(REGISTER_SUCCESSFUL, SIZE_RESPONSE_CODE);
+	}
+	else {
+		response.content = reform(REGISTER_FAIL, SIZE_RESPONSE_CODE);
+	}
+
+	return response;
+}
+
+
 /**Solve Get List request**/
 Message getList(SOCKET &socket, Message &request) {
 	Account *account = mapAccounts[socket];
-	Message response(RESPONSE, reform(RES_UNDENTIFY_RESULT, SIZE_RESPONSE_CODE));
+	Message response(RESPONSE_TO_CLIENT, reform(UNDENTIFIED, SIZE_RESPONSE_CODE));
 
-
+	response.content = reform(GET_LIST_FRIEND_SUCCESSFUL, SIZE_RESPONSE_CODE) + getListFriendOnline(account->username);
+	
 	return response;
 }
 
 
 /**Solve Add Friend request**/
-Message addFriend(SOCKET &socket, Message &request) {
+Message sendFriendInvitation(SOCKET &socket, Message &request) {
 	Account *account = mapAccounts[socket];
-	Message response(RESPONSE, reform(RES_UNDENTIFY_RESULT, SIZE_RESPONSE_CODE));
+	Message response(RESPONSE_TO_CLIENT, reform(UNDENTIFIED, SIZE_RESPONSE_CODE));
 
+	SOCKET sock = findSocket(request.content);
+	
+	if (sock == NULL) {
+		response.content = reform(SEND_FRIEND_INVITATION_FAIL, SIZE_RESPONSE_CODE);
+	}
+	else {
+		/**
+			
+		////send somhing
+		**/
+		response.content = reform(SEND_FRIEND_INVITATION_SUCCESSFUL, SIZE_RESPONSE_CODE);
+	}
 
 	return response;
 }
 
 
 /**Solve Challenge request**/
-Message challenge(SOCKET &socket, Message &request) {
+Message sendChallengeInvitation(SOCKET &socket, Message &request) {
 	Account *account = mapAccounts[socket];
-	Message response(RESPONSE, reform(RES_UNDENTIFY_RESULT, SIZE_RESPONSE_CODE));
+	Message response(RESPONSE_TO_CLIENT, reform(UNDENTIFIED, SIZE_RESPONSE_CODE));
 
+	SOCKET sock = findSocket(request.content);
 
-	return response;
-}
+	if (sock == NULL) {
+		response.content = reform(SEND_CHALLENGE_INVITATION_FAIL, SIZE_RESPONSE_CODE);
+	}
+	else {
+		/**
 
-
-/**Solve Accept Challenge request**/
-Message acceptChallenge(SOCKET &socket, Message &request) {
-	Account *account = mapAccounts[socket];
-	Message response(RESPONSE, reform(RES_UNDENTIFY_RESULT, SIZE_RESPONSE_CODE));
-
-
-	return response;
-}
-
-/**Solve Deny Challenge request**/
-Message denyChallenge(SOCKET &socket, Message &request) {
-	Account *account = mapAccounts[socket];
-	Message response(RESPONSE, reform(RES_UNDENTIFY_RESULT, SIZE_RESPONSE_CODE));
-
-
-	return response;
-}
-
-
-/**Solve Start Match request**/
-Message startMatch(SOCKET &socket, Message &request) {
-	Account *account = mapAccounts[socket];
-	Message response(RESPONSE, reform(RES_UNDENTIFY_RESULT, SIZE_RESPONSE_CODE));
-
-
-	return response;
-}
-
-
-/**Solve Stop Match request**/
-Message stopMatch(SOCKET &socket, Message &request) {
-	Account *account = mapAccounts[socket];
-	Message response(RESPONSE, reform(RES_UNDENTIFY_RESULT, SIZE_RESPONSE_CODE));
-
-
-	return response;
-}
-
-
-/**Solve Play request**/
-Message play(SOCKET &socket, Message &request) {
-	Account *account = mapAccounts[socket];
-	Message response(RESPONSE, reform(RES_UNDENTIFY_RESULT, SIZE_RESPONSE_CODE));
-
+		////send somhing to other client
+		**/
+		response.content = reform(SEND_CHALLENGE_INVITATION_SUCCESSFUL, SIZE_RESPONSE_CODE);
+	}
 
 	return response;
 }
@@ -493,7 +503,7 @@ Message play(SOCKET &socket, Message &request) {
 /**Solve Get Log request**/
 Message getLog(SOCKET &socket, Message &request) {
 	Account *account = mapAccounts[socket];
-	Message response(RESPONSE, reform(RES_UNDENTIFY_RESULT, SIZE_RESPONSE_CODE));
+	Message response(RESPONSE_TO_CLIENT, reform(UNDENTIFIED, SIZE_RESPONSE_CODE));
 
 
 	return response;
@@ -503,14 +513,71 @@ Message getLog(SOCKET &socket, Message &request) {
 /**Solve Chat request**/
 Message chat(SOCKET &socket, Message &request) {
 	Account *account = mapAccounts[socket];
-	Message response(RESPONSE, reform(RES_UNDENTIFY_RESULT, SIZE_RESPONSE_CODE));
+	Message response(RESPONSE_TO_CLIENT, reform(UNDENTIFIED, SIZE_RESPONSE_CODE));
 
 
 	return response;
 }
 
 
+/**Solve Get request**/
+void resAcceptFriendInvitation(SOCKET &socket, Message &response) {
+	Account *account = mapAccounts[socket];
+	
+}
 
+/**Solve Get request**/
+void resDenyFriendInvitation(SOCKET &socket, Message &response) {
+	Account *account = mapAccounts[socket];
+
+}
+
+/**Solve Get request**/
+void resAcceptChallengeInvitation(SOCKET &socket, Message &response) {
+	Account *account = mapAccounts[socket];
+
+}
+
+/**Solve Get request**/
+void resDenyChallengInvitation(SOCKET &socket, Message &response) {
+	Account *account = mapAccounts[socket];
+
+}
+
+
+
+///////////////////////////// In Gamming /////////////////////////////
+
+/**Solve Stop Match request**/
+Message stopMatch(SOCKET &socket, Message &request) {
+	Account *account = mapAccounts[socket];
+	Message response(RESPONSE_TO_CLIENT, reform(UNDENTIFIED, SIZE_RESPONSE_CODE));
+
+
+	return response;
+}
+
+
+/**Solve Play request**/
+Message play(SOCKET &socket, Message &request) {
+	Account *account = mapAccounts[socket];
+	Message response(RESPONSE_TO_CLIENT, reform(UNDENTIFIED, SIZE_RESPONSE_CODE));
+
+	return response;
+}
+
+/** Send command StartGame to client**/
+void startGame(Match *match) {
+
+}
+
+/** Send command EndGame to client**/
+void endGame(Match *match) {
+
+}
+
+
+/////////////////////////////////////////////////////////////
 
 /*
 * @function solve: solve request of the account
@@ -521,50 +588,67 @@ Message chat(SOCKET &socket, Message &request) {
 **/
 Message solveRequest(SOCKET &socket, Message &request) {
 	Account *account = mapAccounts[socket];
-	Message response(RESPONSE, reform(RES_UNDENTIFY_RESULT, SIZE_RESPONSE_CODE));
+	Message response(RESPONSE_TO_CLIENT, reform(UNDENTIFIED, SIZE_RESPONSE_CODE));
 
 	switch (request.command) {
-	case REQ_LOGIN:
+	case CREQ_LOGIN:
 		response = login(socket, request);
 		break;
-	case REQ_LOGOUT:
+	case CREQ_LOGOUT:
 		response = logout(socket, request);
 		break;
-	case REQ_GET_LIST:
+	case CREQ_REGISTER:
+		response = registerAccount(socket, request);
+		break;
+	case CREQ_GET_LIST_FRIEND:
 		response = getList(socket, request);
 		break;
-	case REQ_ADD_FRIEND:
-		response = addFriend(socket, request);
+	case CREQ_SEND_FRIEND_INVITATION:
+		response = sendFriendInvitation(socket, request);
 		break;
-	case REQ_CHALLENGE:
-		response = challenge(socket, request);
+	case CREQ_SEND_CHALLENGE_INVITATION:
+		response = sendChallengeInvitation(socket, request);
 		break;
-	case REQ_ACCEPT_CHALLENGE:
-		response = acceptChallenge(socket, request);
-		break;
-	case REQ_DENY_CHALLENGE:
-		response = denyChallenge(socket, request);
-	case REQ_START_MATCH:
-		response = startMatch(socket, request);
-		break;
-	case REQ_STOP_MATCH:
+	case CREQ_STOP_GAME:
 		response = stopMatch(socket, request);
 		break;
-	case REQ_PLAY:
+	case CREQ_PLAY:
 		response = play(socket, request);
 		break;
-	case REQ_GET_LOG:
-		response = getLog(socket, request);
-		break;
-	case REQ_CHAT:
+	case CREQ_CHAT:
 		response = chat(socket, request);
 		break;
-	case RESPONSE:
-		break;
 	default:
-		saveLog(account, request, RES_UNDENTIFY_RESULT);
+		saveLog(account, request, UNDENTIFIED);
 		break;
 	}
 
 	return response;
+}
+
+void solveResponseFromClient(SOCKET &socket, Message &response) {
+	int statusCode = atoi(response.content.substr(0, SIZE_RESPONSE_CODE).c_str());
+	
+	if (statusCode == 0) return;
+
+	switch (statusCode) {
+	case ACCEPT_FRIEND_INVITATION:
+		resAcceptFriendInvitation(socket, response);
+		break;
+	case DENY_FRIEND_INVITATION: 
+		resDenyFriendInvitation(socket, response);
+		break;
+	case ACCEPT_CHALLENGE_INVITATION:
+		resAcceptChallengeInvitation(socket, response);
+		break;
+	case DENY_CHALLENGE_INVITATION:
+		resDenyChallengInvitation(socket, response);
+		break;
+	case RECEIVED_REQUEST_START_GAME:
+		break;
+	case RECEIVED_REQUEST_END_GAME:
+		break;
+	}
+
+
 }

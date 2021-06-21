@@ -22,6 +22,10 @@ int getStatus(Message request) {
 	string line;
 	ifstream myfile(FILE_ACCOUNT);
 
+	size_t found = request.content.find("$");
+	string username = request.content.substr(0, found);
+	string password = request.content.substr(found + 1);
+
 	if (myfile.is_open()) {
 		while (getline(myfile, line)) {
 			string user;
@@ -40,6 +44,22 @@ int getStatus(Message request) {
 	}
 
 	return NOT_EXIST;
+}
+
+bool registerAccount(Message request) {
+	size_t found = request.content.find("$");
+	string username = request.content.substr(0, found);
+	string password = request.content.substr(found + 1);
+
+	ofstream myfile(FILE_ACCOUNT, ios::app);
+	if (myfile.is_open()) {
+		myfile << username << " " << password;
+		myfile.close();
+		return true;
+	}
+
+	return false;
+
 }
 
 void writeNewLogFile() {
@@ -88,4 +108,10 @@ bool save(const char* log) {
 	}
 
 	return false;
+}
+
+string getListFriendOnline(string username) {
+	string rs;
+
+	return rs;
 }
