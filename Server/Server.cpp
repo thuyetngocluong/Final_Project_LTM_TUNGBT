@@ -553,6 +553,19 @@ Message stopMatch(SOCKET &socket, Message &request) {
 	Account *account = mapAccounts[socket];
 	Message response(RESPONSE_TO_CLIENT, reform(UNDENTIFIED, SIZE_RESPONSE_CODE));
 
+	SOCKET sock = findSocket(request.content);
+
+	if (sock != NULL) {
+
+		account->matchStatus = NOT_IN_GAME;
+		response.content = reform(SREQ_END_GAME, SIZE_RESPONSE_CODE);
+
+	}
+	else {
+
+	}
+
+	
 
 	return response;
 }
@@ -562,18 +575,35 @@ Message stopMatch(SOCKET &socket, Message &request) {
 Message play(SOCKET &socket, Message &request) {
 	Account *account = mapAccounts[socket];
 	Message response(RESPONSE_TO_CLIENT, reform(UNDENTIFIED, SIZE_RESPONSE_CODE));
+	
+	SOCKET sock = findSocket(request.content);
 
+	Match* match;
+	memset(match->board, NULL, sizeof(match->board));
+	match->xSock = socket;
+	match->ySock = socket;
+
+	do {
+		
+	} while (match->xPlay == true || match->oPlay == true);
+
+	response.content = reform(SREQ_END_GAME, SIZE_RESPONSE_CODE);
 	return response;
 }
 
 /** Send command StartGame to client**/
 void startGame(Match *match) {
+	Message response(RESPONSE_TO_CLIENT, reform(UNDENTIFIED, SIZE_RESPONSE_CODE));
+
+	response.content = reform(SREQ_START_GAME, SIZE_RESPONSE_CODE);
 
 }
 
 /** Send command EndGame to client**/
 void endGame(Match *match) {
+	Message response(RESPONSE_TO_CLIENT, reform(UNDENTIFIED, SIZE_RESPONSE_CODE));
 
+	response.content = reform(SREQ_END_GAME, SIZE_RESPONSE_CODE);
 }
 
 
