@@ -2,6 +2,8 @@
 //
 
 #include "stdafx.h"
+#include <stdexcept>
+#include <memory>
 #include <winsock2.h>
 #include <WS2tcpip.h>
 #include <windows.h>
@@ -9,38 +11,28 @@
 #include <process.h>
 #include <conio.h>
 #include <map>
-#include <mutex>
+#include <set>
+#include <SQLAPI.h>
+
 #include <ctype.h>
 #include <time.h>
 #include <queue>
+#include <string>
 #include <fstream>
 #include <iostream>
 #include <sstream>
 #include <filesystem>
 #include <utility>
 
-using std::map;
-using std::string;
-using std::ifstream;
-using std::ofstream;
-using std::stringstream;
-using std::ios;
-using std::pair;
+#pragma comment(lib, "Ws2_32.lib")
 
-#include "Utilities.h"
-#include "Message.h"
-#include "File.h"
-#include "Account.h"
-#include "Match.h"
+using namespace std;
 
-
-#define SERVER_ADDR "127.0.0.1"
+#define SERVER_ADDR "127.0.0.2"
 #define SERVER_PORT 6000
 #define DATA_BUFSIZE 8192
 #define RECEIVE 0
 #define SEND 1
-
-#pragma comment(lib, "Ws2_32.lib")
 
 
 // Structure definition
@@ -60,35 +52,54 @@ typedef struct {
 } PER_HANDLE_DATA, *LPPER_HANDLE_DATA;
 
 
-void				deleteAccount(SOCKET&);
-void				lock(HANDLE&);
-void				unlock(HANDLE&);
+#include "Protocol.h"
+#include "Utilities.h"
+#include "Message.h"
+#include "Player.h"
+#include "Database.h"
+#include "File.h"
+#include "Match.h"
 
-Message				login(SOCKET&, Message&);
-Message				logout(SOCKET&, Message&);
-Message				getList(SOCKET&, Message&);
-Message				sendFriendInvitation(SOCKET&, Message&);
-Message				sendChallengeInvitation(SOCKET&, Message&);
-Message				getLog(SOCKET&, Message&);
-Message				chat(SOCKET&, Message&);
 
-Message				stopMatch(SOCKET&, Message&);
-Message				play(SOCKET&, Message&);
+void				deleteAccount(Account*);
+Account*			findAccount(string);
+Account*			findAccount(LPPER_HANDLE_DATA);
+
+void				solveReqLogin(Account*, Message&);
+void				solveReqLogout(Account*, Message&);
+void				solveReqGetListFriend(Account*, Message&);
+void				solveReqSendFriendInvitation(Account*, Message&);
+void				solveReqSendChallengeInvitation(Account*, Message&);
+void				getLog(Account*, Message&);
+void				solveReqChat(Account*, Message&);
+
+void				solveReqStopMatch(Account*, Message&);
+void				solveReqPlay(Account*, Message&);
 void				startGame(Match *match);
 void				endGame(Match *match);
 
-Message				solveRequest(SOCKET&, Message&);
+void				solveResponseFromClient(Account*, Message&);
+void				solveRequest(Account*, Message&);
 
 void				processAccount(Account*);
 unsigned __stdcall	serverWorkerThread(LPVOID CompletionPortID);
 
+#include "Account.h"
 
-map<SOCKET, Account*> mapAccounts;
-map<pair<SOCKET, SOCKET>, Match*> mapMatch;
+set<Account*> accounts;
+Account *account = NULL;
+static map<pair<Account*, Account*>, Match*> mapMatch;
+
+bool sendingRequest = false;
+HANDLE mutexSendingRequest;
+
+Data *database;
 
 
 int _tmain(int argc, _TCHAR* argv[])
 {
+	database = Data::getInstance();
+
 	SOCKADDR_IN serverAddr, clientAddr;
 	SOCKET listenSock, acceptSock;
 	HANDLE completionPort;
@@ -98,7 +109,7 @@ int _tmain(int argc, _TCHAR* argv[])
 	DWORD transferredBytes;
 	DWORD flags;
 	WSADATA wsaData;
-	Account *account;
+	
 
 	if (WSAStartup((2, 2), &wsaData) != 0) {
 		printf("WSAStartup() failed with error %d\n", GetLastError());
@@ -171,30 +182,20 @@ int _tmain(int argc, _TCHAR* argv[])
 			continue;
 		}
 
-		account = new Account;
+		account = new Account(perHandleData, perIoData);
 		inet_ntop(AF_INET, &clientAddr, account->IP, INET_ADDRSTRLEN);
 		account->PORT = ntohs(clientAddr.sin_port);
-		mapAccounts.insert({ perHandleData->socket, account });
+		accounts.insert(account);
 
-		ZeroMemory(&(perIoData->overlapped), sizeof(OVERLAPPED));
-		perIoData->sentBytes = 0;
-		perIoData->recvBytes = 0;
-		perIoData->dataBuff.len = DATA_BUFSIZE;
-		perIoData->dataBuff.buf = perIoData->buffer;
-		perIoData->operation = RECEIVE;
-		flags = 0;
+		account->recvMsg();
 
-		if (WSARecv(acceptSock, &(perIoData->dataBuff), 1, &transferredBytes, &flags, &(perIoData->overlapped), NULL) == SOCKET_ERROR) {
-			if (WSAGetLastError() != ERROR_IO_PENDING) {
-				printf("WSARecv() failed with error %d\n", WSAGetLastError());
-				deleteAccount(acceptSock);
-				continue;
-			}
-		}
+		Sleep(5000);
 	}
 	_getch();
 	return 0;
 }
+
+
 
 unsigned __stdcall serverWorkerThread(LPVOID completionPortID)
 {
@@ -205,138 +206,99 @@ unsigned __stdcall serverWorkerThread(LPVOID completionPortID)
 	DWORD transferredBytes;
 	LPPER_HANDLE_DATA perHandleData;
 	LPPER_IO_OPERATION_DATA perIoData;
-	DWORD flags;
-	int lenResponse = 0;
-	Message response, request;
-	char *cResponse = NULL;
-	Account *account;
+	Account *account = NULL;
 
 	while (TRUE) {
+		if (account != NULL) {
+			account->lock();
+			account->waiting = true;
+			account->unlock();
+		}
+
 		if (GetQueuedCompletionStatus(completionPort, &transferredBytes,
 			(LPDWORD)&perHandleData, (LPOVERLAPPED *)&perIoData, INFINITE) == 0) {
 			printf("GetQueuedCompletionStatus() failed with error %d\n", GetLastError());
 			continue;
 		}
-		if (mapAccounts.find(perHandleData->socket) == mapAccounts.end()) continue;
-		account = mapAccounts.at(perHandleData->socket);
-		lock(account->mutex);
 
+		account = findAccount(perHandleData);
+		if (account == NULL) continue;
+
+		account->lock();
+		account->waiting = false;
 
 		// Check to see if an error has occurred on the socket and if so
 		// then close the socket and cleanup the SOCKET_INFORMATION structure
 		// associated with the socket
-		if (transferredBytes == 0) {
+		if (transferredBytes == 0 && perIoData->operation != SEND) {
 			printf("Closing socket %d\n", perHandleData->socket);
 			GlobalFree(perHandleData);
 			GlobalFree(perIoData);
-			unlock(account->mutex);
-			deleteAccount(perHandleData->socket);
+			deleteAccount(account);
 			continue;
 		}
 
-		// Check to see if the operation field equals RECEIVE. If this is so, then
-		// this means a WSARecv call just completed so update the recvBytes field
-		// with the transferredBytes value from the completed WSARecv() call
+		
+
 		if (perIoData->operation == RECEIVE) {
+			account->numberInQueue -= 1;
+			// process received message here
+			perIoData->dataBuff.buf[transferredBytes] = 0;
 			saveMessage(perIoData->dataBuff.buf, account->restMessage, account->requests);
+
+			if (account->requests.empty() && account->numberInQueue <= 0) {
+				account->recvMsg();
+			} 
+
+			while (!account->requests.empty()) {
+				Message request = account->requests.front();
+				account->requests.pop();
+				cout << "Recv: " << request.toMessageSend() << endl;
+				if (request.command == RESPONSE_TO_SERVER) {
+					solveResponseFromClient(account, request);
+				}
+				else {
+					solveRequest(account, request);
+				} 
+			}
 		}
 		else if (perIoData->operation == SEND) {
 			perIoData->sentBytes += transferredBytes;
-		}
 
-		// if queue of request not empty and processed request before completely
-		// process new request
-		if (!account->requests.empty() && perIoData->recvBytes <= perIoData->sentBytes) {
-			request = account->requests.front();
-			account->requests.pop();
-			response = solveRequest(perHandleData->socket, request);
-
-			string tmp = response.toMessageSend();
-
-			lenResponse = tmp.length();
-
-			if (cResponse != NULL) {
-				delete[] cResponse;
-				cResponse = NULL;
+			if (account->canContinuteSendMsg()) {
+				account->continuteSendMsg();
 			}
-
-			cResponse = new char[lenResponse + 1];
-			strcpy_s(cResponse, lenResponse + 1, tmp.c_str());
-			cResponse[lenResponse] = NULL;
-
-			perIoData->recvBytes = lenResponse;
-			perIoData->sentBytes = 0;
-			perIoData->operation = SEND;
-		}
-
-		if (perIoData->recvBytes > perIoData->sentBytes) {
-			// Post another WSASend() request.
-			// Since WSASend() is not guaranteed to send all of the bytes requested,
-			// continue posting WSASend() calls until all received bytes are sent.
-			ZeroMemory(&(perIoData->overlapped), sizeof(OVERLAPPED));
-			perIoData->dataBuff.buf = cResponse + perIoData->sentBytes;
-			perIoData->dataBuff.len = perIoData->recvBytes - perIoData->sentBytes;
-			perIoData->operation = SEND;
-
-
-			if (WSASend(perHandleData->socket, &(perIoData->dataBuff), 1, &transferredBytes, 0, &(perIoData->overlapped), NULL) == SOCKET_ERROR) {
-				if (WSAGetLastError() != ERROR_IO_PENDING) {
-					printf("WSASend() failed with error %d\n", WSAGetLastError());
-					unlock(account->mutex);
-					deleteAccount(perHandleData->socket);
-					continue;
-				}
+			else if (account->canSendNewMsg()) {
+				account->sendNewMsg();
+			}
+			else if (account->numberInQueue <= 0) {
+				cout << "Sent" << endl;
+				account->recvMsg();
 			}
 		}
-		else if (account->requests.empty()) {
-			// No more bytes to send post another WSARecv() request
-			ZeroMemory(&(perIoData->overlapped), sizeof(OVERLAPPED));
-			ZeroMemory(perIoData->buffer, sizeof(perIoData->buffer));
-			if (cResponse != NULL) {
-				delete[] cResponse;
-				cResponse = NULL;
-			}
-			perIoData->recvBytes = 0;
-			perIoData->sentBytes = 0;
-			perIoData->operation = RECEIVE;
-			perIoData->dataBuff.buf = perIoData->buffer;
-			perIoData->dataBuff.len = DATA_BUFSIZE;
-			flags = 0;
 
-			if (WSARecv(perHandleData->socket,
-				&(perIoData->dataBuff),
-				1,
-				&transferredBytes,
-				&flags,
-				&(perIoData->overlapped), NULL) == SOCKET_ERROR) {
-				if (WSAGetLastError() != ERROR_IO_PENDING) {
-					printf("WSARecv() failed with error %d\n", WSAGetLastError());
-					unlock(account->mutex);
-					deleteAccount(perHandleData->socket);
-					continue;
-				}
-			}
-		}
-		unlock(account->mutex);
+		account->unlock();
 	}
 
 	printf("Thread %d stop!\n", GetCurrentThreadId());
 }
 
 
-void lock(HANDLE &mutex) {
-	WaitForSingleObject(mutex, INFINITE);
+
+Account* findAccount(string username) {
+	for (auto i = accounts.begin(); i != accounts.end(); i++) {
+		if ((*i)->username.compare(username) == 0) {
+			return (*i);
+		}
+	}
+
+	return NULL;
 }
 
-void unlock(HANDLE &mutex) {
-	ReleaseMutex(mutex);
-}
-
-
-SOCKET findSocket(string username) {
-	for (auto i = mapAccounts.begin(); i != mapAccounts.end(); i++) {
-		if (i->second->username.compare(username) == 0) {
-			return i->first;
+Account* findAccount(LPPER_HANDLE_DATA perHandleData) {
+	for (auto i = accounts.begin(); i != accounts.end(); i++) {
+		if ((*i)->perHandleData == perHandleData) {
+			return (*i);
 		}
 	}
 
@@ -348,14 +310,13 @@ SOCKET findSocket(string username) {
 * @param socket: socket need to delete
 *
 (**/
-void deleteAccount(SOCKET &socket) {
-	if (mapAccounts.find(socket) == mapAccounts.end()) return;
-	Account *acc = mapAccounts[socket];
-	CloseHandle(acc->mutex);
-	mapAccounts.erase(socket);
-	while (!acc->requests.empty()) acc->requests.pop();
-	delete acc;
-	closesocket(socket);
+void deleteAccount(Account *account) {
+	CloseHandle(account->mutex);
+	accounts.erase(account);
+	while (!account->requests.empty()) account->requests.pop();
+	while (!account->messagesNeesToSend.empty()) account->messagesNeesToSend.pop();
+	closesocket(account->perHandleData->socket);
+	delete account;
 }
 
 /*
@@ -365,43 +326,39 @@ void deleteAccount(SOCKET &socket) {
 *
 * @param: a message brings result code
 **/
-Message login(SOCKET &socket, Message &request) {
-	Account *account = mapAccounts[socket];
+void solveReqLogin(Account *account, Message &request) {
 	Message response(RESPONSE_TO_CLIENT, reform(UNDENTIFIED, SIZE_RESPONSE_CODE));
-
-	int statusAccount = getStatus(request);
+	string content = request.content;
+	size_t found = content.find("$");
+	string username = content.substr(0, found);
+	string password = content.substr(found + 1);
 
 	//if the account already logged 
-	if (account->signInStatus == LOGGED) {
-		saveLog(account, request, LOGIN_FAIL_LOGGED);
-		response.content = reform(LOGIN_FAIL_LOGGED, SIZE_RESPONSE_CODE);
-		return response;
-	}
-
-	//check status of account
-	switch (getStatus(request)) {
-	case ACTIVE:
-		account->username = request.content;
-		account->signInStatus = LOGGED;
-		saveLog(account, request, LOGIN_SUCCESSFUL);
+	if (database->login(username, password)) {
+		account->username = username;
 		response.content = reform(LOGIN_SUCCESSFUL, SIZE_RESPONSE_CODE);
-		break;
+		vector<Player> listFr = database->getListFriend(database->getPlayerByName(account->username));
+		int i = 0;
+		string listFrReform = "";
+		for (auto player = listFr.begin(); player != listFr.end(); player++) {
+			i++;
+			listFrReform += player->getUsername() + "&" + to_string(player->getElo());
+			if (i != listFr.size()) listFrReform += "$";
+		}
 
-	case LOCKED:
-		saveLog(account, request, LOGIN_FAIL_LOCKED);
-		response.content = reform(LOGIN_FAIL_LOCKED, SIZE_RESPONSE_CODE);
-		break;
+		Message ms1(RESPONSE_TO_CLIENT, listFrReform);
 
-	case NOT_EXIST:
-		saveLog(account, request, LOGIN_FAIL_WRONG);
-		response.content = reform(LOGIN_FAIL_WRONG, SIZE_RESPONSE_CODE);
-		break;
+		cout << "Pending send: " << response.toMessageSend() << ms1.toMessageSend() << endl;
+
+		account->addMessageNeedToSend(response); // send response
+		account->addMessageNeedToSend(ms1); // send list friend
+	}
+	else {
+		account->addMessageNeedToSend(response);
+		response.content = reform(LOGIN_FAIL, SIZE_RESPONSE_CODE);
 	}
 
-	return response;
 }
-
-
 
 
 /*
@@ -411,8 +368,7 @@ Message login(SOCKET &socket, Message &request) {
 *
 * @param: a message brings result code
 **/
-Message logout(SOCKET &socket, Message &request) {
-	Account *account = mapAccounts[socket];
+void solveReqLogout(Account *account, Message &request) {
 	Message response(RESPONSE_TO_CLIENT, reform(UNDENTIFIED, SIZE_RESPONSE_CODE));
 
 	if (account->signInStatus == NOT_LOGGED) {
@@ -425,185 +381,209 @@ Message logout(SOCKET &socket, Message &request) {
 		saveLog(account, request, LOGOUT_SUCCESSFUL);
 	}
 
-	return response;
+	account->addMessageNeedToSend(response);
+
 }
 
 
 /**Solve Register Account request**/
-Message registerAccount(SOCKET &socket, Message &request) {
-	Account *account = mapAccounts[socket];
+void solveReqRegisterAccount(Account *account, Message &request) {
 	Message response(RESPONSE_TO_CLIENT, reform(UNDENTIFIED, SIZE_RESPONSE_CODE));
 
-	if (registerAccount(request)) {
+	if (solveReqRegisterAccount(request)) {
 		response.content = reform(REGISTER_SUCCESSFUL, SIZE_RESPONSE_CODE);
 	}
 	else {
 		response.content = reform(REGISTER_FAIL, SIZE_RESPONSE_CODE);
 	}
 
-	return response;
 }
 
 
 /**Solve Get List request**/
-Message getList(SOCKET &socket, Message &request) {
-	Account *account = mapAccounts[socket];
+void solveReqGetListFriend(Account *account, Message &request) {
 	Message response(RESPONSE_TO_CLIENT, reform(UNDENTIFIED, SIZE_RESPONSE_CODE));
 
-	response.content = reform(GET_LIST_FRIEND_SUCCESSFUL, SIZE_RESPONSE_CODE) + getListFriendOnline(account->username);
-	
-	return response;
+	vector<Player> listFr = database->getListFriend(database->getPlayerByName(account->username));
+	string listFrReform = "";
+	int i = 0;
+
+	for (auto player = listFr.begin(); player != listFr.end(); player++) {
+		i++;
+		listFrReform += player->getUsername() + "&" + to_string(player->getElo());
+		if (i != listFr.size()) listFrReform += "$";
+	}
+
+	response.content = reform(GET_LIST_FRIEND_SUCCESSFUL, SIZE_RESPONSE_CODE) + listFrReform;
+
+	account->addMessageNeedToSend(response);
+
 }
 
 
 /**Solve Add Friend request**/
-Message sendFriendInvitation(SOCKET &socket, Message &request) {
-	Account *account = mapAccounts[socket];
+void solveReqSendFriendInvitation(Account *account, Message &request) {
 	Message response(RESPONSE_TO_CLIENT, reform(UNDENTIFIED, SIZE_RESPONSE_CODE));
 
-	SOCKET sock = findSocket(request.content);
-	
+	SOCKET sock = account->perHandleData->socket;
+
 	if (sock == NULL) {
 		response.content = reform(SEND_FRIEND_INVITATION_FAIL, SIZE_RESPONSE_CODE);
+		account->addMessageNeedToSend(response);
 	}
 	else {
-		/**
-			
-		////send somhing
-		**/
+		Message requestToFr(SREQ_SEND_FRIEND_INVITATION, account->username);
+
 		response.content = reform(SEND_FRIEND_INVITATION_SUCCESSFUL, SIZE_RESPONSE_CODE);
+
+		account->addMessageNeedToSend(response);
+		account->addMessageNeedToSend(requestToFr);
 	}
 
-	return response;
+
 }
 
 
 /**Solve Challenge request**/
-Message sendChallengeInvitation(SOCKET &socket, Message &request) {
-	Account *account = mapAccounts[socket];
+void solveReqSendChallengeInvitation(Account *account, Message &request) {
 	Message response(RESPONSE_TO_CLIENT, reform(UNDENTIFIED, SIZE_RESPONSE_CODE));
 
-	SOCKET sock = findSocket(request.content);
+	SOCKET sock = account->perHandleData->socket;
 
 	if (sock == NULL) {
 		response.content = reform(SEND_CHALLENGE_INVITATION_FAIL, SIZE_RESPONSE_CODE);
+		account->addMessageNeedToSend(response);
 	}
 	else {
-		/**
+		Message requestToFr(SREQ_SEND_CHALLENGE_INVITATION, account->username);
 
-		////send somhing to other client
-		**/
+
 		response.content = reform(SEND_CHALLENGE_INVITATION_SUCCESSFUL, SIZE_RESPONSE_CODE);
+		account->addMessageNeedToSend(response);
+		account->addMessageNeedToSend(requestToFr);
 	}
 
-	return response;
+
 }
 
 
 /**Solve Get Log request**/
-Message getLog(SOCKET &socket, Message &request) {
-	Account *account = mapAccounts[socket];
+void getLog(Account *account, Message &request) {
 	Message response(RESPONSE_TO_CLIENT, reform(UNDENTIFIED, SIZE_RESPONSE_CODE));
 
 
-	return response;
 }
- 
+
 
 /**Solve Chat request**/
-Message chat(SOCKET &socket, Message &request) {
-	Account *account = mapAccounts[socket];
+void solveReqChat(Account *account, Message &request) {
 	Message response(RESPONSE_TO_CLIENT, reform(UNDENTIFIED, SIZE_RESPONSE_CODE));
 
 
-	return response;
-}
-
-
-/**Solve Get request**/
-void resAcceptFriendInvitation(SOCKET &socket, Message &response) {
-	Account *account = mapAccounts[socket];
 	
 }
 
-/**Solve Get request**/
-void resDenyFriendInvitation(SOCKET &socket, Message &response) {
-	Account *account = mapAccounts[socket];
-
-}
 
 /**Solve Get request**/
-void resAcceptChallengeInvitation(SOCKET &socket, Message &response) {
-	Account *account = mapAccounts[socket];
+void solveResAcceptFriendInvitation(Account *account, Message &response) {
+	Message resp(RESPONSE_TO_CLIENT, reform(UNDENTIFIED, SIZE_RESPONSE_CODE));
+	SOCKET sock = account->perHandleData->socket;
 
-}
-
-/**Solve Get request**/
-void resDenyChallengInvitation(SOCKET &socket, Message &response) {
-	Account *account = mapAccounts[socket];
-
-}
-
-
-
-///////////////////////////// In Gamming /////////////////////////////
-
-/**Solve Stop Match request**/
-Message stopMatch(SOCKET &socket, Message &request) {
-	Account *account = mapAccounts[socket];
-	Message response(RESPONSE_TO_CLIENT, reform(UNDENTIFIED, SIZE_RESPONSE_CODE));
-
-	SOCKET sock = findSocket(request.content);
-
-	if (sock != NULL) {
-
-		account->matchStatus = NOT_IN_GAME;
-		response.content = reform(SREQ_END_GAME, SIZE_RESPONSE_CODE);
+	if (sock == NULL) {
+		resp.content = reform(SEND_FRIEND_INVITATION_FAIL, SIZE_RESPONSE_CODE);
 
 	}
 	else {
+		Message requestToFr(ACCEPT_FRIEND_INVITATION, account->username);
 
+		resp.content = reform(SEND_FRIEND_INVITATION_SUCCESSFUL, SIZE_RESPONSE_CODE);
 	}
+
+}
+
+/**Solve Get request**/
+void solveResDenyFriendInvitation(Account *account, Message &response) {
+	SOCKET sock = account->perHandleData->socket;
+	Message resp(RESPONSE_TO_CLIENT, reform(UNDENTIFIED, SIZE_RESPONSE_CODE));
+
+	if (sock == NULL) {
+		resp.content = reform(SEND_FRIEND_INVITATION_FAIL, SIZE_RESPONSE_CODE);
+	}
+	else {
+		Message requestToFr(DENY_FRIEND_INVITATION, account->username);
+
+		resp.content = reform(SEND_FRIEND_INVITATION_SUCCESSFUL, SIZE_RESPONSE_CODE);
+	}
+
+
+}
+
+/**Solve Get request**/
+void solveResAcceptChallengeInvitation(Account *account, Message &response) {
+	SOCKET sock = account->perHandleData->socket;
+	Message resp(RESPONSE_TO_CLIENT, reform(UNDENTIFIED, SIZE_RESPONSE_CODE));
+
+	if (sock == NULL) {
+		resp.content = reform(SEND_CHALLENGE_INVITATION_FAIL, SIZE_RESPONSE_CODE);
+	}
+	else {
+		Message requestToFr(ACCEPT_CHALLENGE_INVITATION, account->username);
+
+		resp.content = reform(SEND_CHALLENGE_INVITATION_SUCCESSFUL, SIZE_RESPONSE_CODE);
+	}
+
+}
+
+/**Solve Get request**/
+void solveResDenyChallengInvitation(Account *account, Message &response) {
+	SOCKET sock = account->perHandleData->socket;
+	Message resp(RESPONSE_TO_CLIENT, reform(UNDENTIFIED, SIZE_RESPONSE_CODE));
+
+	if (sock == NULL) {
+		resp.content = reform(SEND_CHALLENGE_INVITATION_FAIL, SIZE_RESPONSE_CODE);
+	}
+	else {
+		Message requestToFr(DENY_CHALLENGE_INVITATION, account->username);
+		resp.content = reform(SEND_CHALLENGE_INVITATION_SUCCESSFUL, SIZE_RESPONSE_CODE);
+	}
+}
+
+
+
+///////////////////////////// In Gamme /////////////////////////////
+
+/**Solve Stop Match request**/
+void solveReqStopMatch(Account *account, Message &request) {
+	Message response(RESPONSE_TO_CLIENT, reform(UNDENTIFIED, SIZE_RESPONSE_CODE));
+	//
+	// get database
+	// solve request
+	//
 
 	
 
-	return response;
 }
 
 
 /**Solve Play request**/
-Message play(SOCKET &socket, Message &request) {
-	Account *account = mapAccounts[socket];
+void solveReqPlay(Account *account, Message &request) {
 	Message response(RESPONSE_TO_CLIENT, reform(UNDENTIFIED, SIZE_RESPONSE_CODE));
-	
-	SOCKET sock = findSocket(request.content);
 
-	Match* match;
-	memset(match->board, NULL, sizeof(match->board));
-	match->xSock = socket;
-	match->ySock = socket;
-
-	do {
-		
-	} while (match->xPlay == true || match->oPlay == true);
-
-	response.content = reform(SREQ_END_GAME, SIZE_RESPONSE_CODE);
-	return response;
 }
+
 
 /** Send command StartGame to client**/
 void startGame(Match *match) {
-	Message response(RESPONSE_TO_CLIENT, reform(UNDENTIFIED, SIZE_RESPONSE_CODE));
-
-	response.content = reform(SREQ_START_GAME, SIZE_RESPONSE_CODE);
-
+ 
 }
 
 /** Send command EndGame to client**/
 void endGame(Match *match) {
-	Message response(RESPONSE_TO_CLIENT, reform(UNDENTIFIED, SIZE_RESPONSE_CODE));
 
-	response.content = reform(SREQ_END_GAME, SIZE_RESPONSE_CODE);
+}
+
+void sloveResRecivedRequestStartGame(Account *account, Message &request) {
+
 }
 
 
@@ -616,65 +596,65 @@ void endGame(Match *match) {
 *
 * @return: the Message struct brings result code
 **/
-Message solveRequest(SOCKET &socket, Message &request) {
-	Account *account = mapAccounts[socket];
-	Message response(RESPONSE_TO_CLIENT, reform(UNDENTIFIED, SIZE_RESPONSE_CODE));
-
+void solveRequest(Account *account, Message &request) {
 	switch (request.command) {
 	case CREQ_LOGIN:
-		response = login(socket, request);
+		solveReqLogin(account, request);
 		break;
 	case CREQ_LOGOUT:
-		response = logout(socket, request);
+		solveReqLogout(account, request);
 		break;
 	case CREQ_REGISTER:
-		response = registerAccount(socket, request);
+		solveReqRegisterAccount(account, request);
 		break;
 	case CREQ_GET_LIST_FRIEND:
-		response = getList(socket, request);
+		solveReqGetListFriend(account, request);
 		break;
 	case CREQ_SEND_FRIEND_INVITATION:
-		response = sendFriendInvitation(socket, request);
+		solveReqSendFriendInvitation(account, request);
 		break;
 	case CREQ_SEND_CHALLENGE_INVITATION:
-		response = sendChallengeInvitation(socket, request);
+		solveReqSendChallengeInvitation(account, request);
 		break;
 	case CREQ_STOP_GAME:
-		response = stopMatch(socket, request);
+		solveReqStopMatch(account, request);
 		break;
 	case CREQ_PLAY:
-		response = play(socket, request);
+		solveReqPlay(account, request);
 		break;
 	case CREQ_CHAT:
-		response = chat(socket, request);
+		solveReqChat(account, request);
 		break;
 	default:
 		saveLog(account, request, UNDENTIFIED);
 		break;
 	}
-
-	return response;
 }
 
-void solveResponseFromClient(SOCKET &socket, Message &response) {
+void solveResponseFromClient(Account *account, Message &response) {
 	int statusCode = atoi(response.content.substr(0, SIZE_RESPONSE_CODE).c_str());
-	
-	if (statusCode == 0) return;
+
+	if (statusCode == 0) {
+		Message resp(RESPONSE_TO_CLIENT, reform(UNDENTIFIED, SIZE_RESPONSE_CODE));
+		account->addMessageNeedToSend(resp);
+		return;
+	};
 
 	switch (statusCode) {
 	case ACCEPT_FRIEND_INVITATION:
-		resAcceptFriendInvitation(socket, response);
+		solveResAcceptFriendInvitation(account, response);
 		break;
-	case DENY_FRIEND_INVITATION: 
-		resDenyFriendInvitation(socket, response);
+	case DENY_FRIEND_INVITATION:
+		solveResDenyFriendInvitation(account, response);
 		break;
 	case ACCEPT_CHALLENGE_INVITATION:
-		resAcceptChallengeInvitation(socket, response);
+		solveResAcceptChallengeInvitation(account, response);
 		break;
 	case DENY_CHALLENGE_INVITATION:
-		resDenyChallengInvitation(socket, response);
+		solveResDenyChallengInvitation(account, response);
 		break;
 	case RECEIVED_REQUEST_START_GAME:
+		sloveResRecivedRequestStartGame(account, response);
 		break;
 	case RECEIVED_REQUEST_END_GAME:
 		break;

@@ -18,6 +18,12 @@ string reform(int a, int numberOfChars) {
 	return rs;
 }
 
+void reform(string &a, int numberOfChars) {
+	for (int i = 0; i < numberOfChars - a.length(); i++) {
+		a += " ";
+	}
+}
+
 /*
 * @function isNumber: Check if a string is a number or not
 * @param s: string needs to be check
