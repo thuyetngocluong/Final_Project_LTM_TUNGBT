@@ -117,7 +117,6 @@ struct SK {
 		perIoData->dataBuff.buf = perIoData->buffer + perIoData->sentBytes;
 		perIoData->dataBuff.len = perIoData->recvBytes - perIoData->sentBytes;
 		perIoData->operation = SEND;
-		numberInQueue += 1;
 		if (WSASend(perHandleData->socket,
 			&(perIoData->dataBuff),
 			1,
@@ -145,7 +144,6 @@ struct SK {
 		perIoData->dataBuff.len = msg.length();
 		perIoData->dataBuff.buf = perIoData->buffer;
 		perIoData->operation = SEND;
-		numberInQueue += 1;
 		if (WSASend(perHandleData->socket,
 			&(perIoData->dataBuff),
 			1,
@@ -328,6 +326,9 @@ unsigned __stdcall serverWorkerThread(LPVOID completionPortID)
 			perIoData->dataBuff.buf[transferredBytes] = 0;
 
 			cout << "Recv: " << perIoData->dataBuff.buf << endl;
+			if (sk->numberInQueue <= 0) {
+				sk->recvMsg();
+			}
 			
 		}
 		else if (perIoData->operation == SEND) {
@@ -338,11 +339,12 @@ unsigned __stdcall serverWorkerThread(LPVOID completionPortID)
 			}
 			else if (sk->canSendNewMsg()) {
 				sk->sendNewMsg();
+			} else if (sk->numberInQueue <= 0) {
+				sk->recvMsg();
 			}
 		}
-		if (sk->numberInQueue <= 0) {
-			sk->recvMsg();
-		}
+
+		
 		sk->unlock();
 	}
 }
