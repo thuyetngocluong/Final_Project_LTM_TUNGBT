@@ -65,16 +65,16 @@ void				deleteAccount(Account*);
 Account*			findAccount(string);
 Account*			findAccount(LPPER_HANDLE_DATA);
 
-void				solveReqLogin(Account*, Message&);
-void				solveReqLogout(Account*, Message&);
-void				solveReqGetListFriend(Account*, Message&);
-void				solveReqSendFriendInvitation(Account*, Message&);
-void				solveReqSendChallengeInvitation(Account*, Message&);
+void				solveLoginReq(Account*, Message&);
+void				solveLogoutReq(Account*, Message&);
+void				solveGetListFriendReq(Account*, Message&);
+void				solveSendFriendInvitationReq(Account*, Message&);
+void				solveSendChallengeInvitationReq(Account*, Message&);
 void				getLog(Account*, Message&);
-void				solveReqChat(Account*, Message&);
+void				solveChatReq(Account*, Message&);
 
-void				solveReqStopMatch(Account*, Message&);
-void				solveReqPlay(Account*, Message&);
+void				solveStopMatchReq(Account*, Message&);
+void				solvePlayReq(Account*, Message&);
 void				startGame(Match *match);
 void				endGame(Match *match);
 
@@ -83,8 +83,12 @@ void				solveRequest(Account*, Message&);
 
 void				processAccount(Account*);
 unsigned __stdcall	serverWorkerThread(LPVOID CompletionPortID);
-
+void				receiveMessage(Account*, char*, int);
+void				newClientConnect(LPPER_HANDLE_DATA, LPPER_IO_OPERATION_DATA, string, int);
+void				clientDisconnect(Account*);
+Account*			findAccount(LPPER_HANDLE_DATA);
 #include "Account.h"
+#include "CompletionPortServer.h"
 
 set<Account*> accounts;
 Account *account = NULL;
@@ -100,187 +104,57 @@ int _tmain(int argc, _TCHAR* argv[])
 {
 	database = Data::getInstance();
 
-	SOCKADDR_IN serverAddr, clientAddr;
-	SOCKET listenSock, acceptSock;
-	HANDLE completionPort;
-	SYSTEM_INFO systemInfo;
-	LPPER_HANDLE_DATA perHandleData;
-	LPPER_IO_OPERATION_DATA perIoData;
-	DWORD transferredBytes;
-	DWORD flags;
-	WSADATA wsaData;
-	
+	getAccountHasEvent = findAccount;
 
-	if (WSAStartup((2, 2), &wsaData) != 0) {
-		printf("WSAStartup() failed with error %d\n", GetLastError());
-		return 1;
-	}
+	onClientDisconnect = clientDisconnect;
 
-	// Step 1: Setup an I/O completion port
-	if ((completionPort = CreateIoCompletionPort(INVALID_HANDLE_VALUE, NULL, 0, 0)) == NULL) {
-		printf("CreateIoCompletionPort() failed with error %d\n", GetLastError());
-		return 1;
-	}
+	onReceive = receiveMessage;
 
-	// Step 2: Determine how many processors are on the system
-	GetSystemInfo(&systemInfo);
-	// Step 3: Create worker threads based on the number of processors available on the
-	// system. Create two worker threads for each processor	
-	for (int i = 0; i < (int)systemInfo.dwNumberOfProcessors * 2; i++) {
-		// Create a server worker thread and pass the completion port to the thread
-		if (_beginthreadex(0, 0, serverWorkerThread, (void*)completionPort, 0, 0) == 0) {
-			printf("Create thread failed with error %d\n", GetLastError());
-			return 1;
-		}
-	}
-	printf("Server startd\nIP: %s\nPORT: %d\n", SERVER_ADDR, SERVER_PORT);
-	// Step 4: Create a listening socket
-	if ((listenSock = WSASocket(AF_INET, SOCK_STREAM, 0, NULL, 0, WSA_FLAG_OVERLAPPED)) == INVALID_SOCKET) {
-		printf("WSASocket() failed with error %d\n", WSAGetLastError());
-		return 1;
-	}
+	onNewClientConnect = newClientConnect;
 
-	serverAddr.sin_family = AF_INET;
-	serverAddr.sin_port = htons(SERVER_PORT);
-	inet_pton(AF_INET, SERVER_ADDR, &serverAddr.sin_addr);
-	if (bind(listenSock, (PSOCKADDR)&serverAddr, sizeof(serverAddr)) == SOCKET_ERROR) {
-		printf("bind() failed with error %d\n", WSAGetLastError());
-		return 1;
-	}
-
-	// Prepare socket for listening
-	if (listen(listenSock, 20) == SOCKET_ERROR) {
-		printf("listen() failed with error %d\n", WSAGetLastError());
-		return 1;
-	}
-
-	while (1) {
-		// Step 5: Accept connections
-		if ((acceptSock = WSAAccept(listenSock, (sockaddr*)&clientAddr, NULL, NULL, 0)) == SOCKET_ERROR) {
-			printf("WSAAccept() failed with error %d\n", WSAGetLastError());
-			continue;
-		}
-
-		// Step 6: Create a socket information structure to associate with the socket
-		if ((perHandleData = (LPPER_HANDLE_DATA)GlobalAlloc(GPTR, sizeof(PER_HANDLE_DATA))) == NULL) {
-			printf("GlobalAlloc() failed with error %d\n", GetLastError());
-			continue;
-		}
-
-		// Step 7: Associate the accepted socket with the original completion port
-		//printf("Socket number %d got connected...\n", acceptSock);
-		perHandleData->socket = acceptSock;
-		if (CreateIoCompletionPort((HANDLE)acceptSock, completionPort, (DWORD)perHandleData, 0) == NULL) {
-			printf("CreateIoCompletionPort() failed with error %d\n", GetLastError());
-			continue;
-		}
+	createServer(SERVER_ADDR, SERVER_PORT);
 
 
-		// Step 8: Create per I/O socket information structure to associate with the WSARecv call
-		if ((perIoData = (LPPER_IO_OPERATION_DATA)GlobalAlloc(GPTR, sizeof(PER_IO_OPERATION_DATA))) == NULL) {
-			printf("GlobalAlloc() failed with error %d\n", GetLastError());
-			continue;
-		}
-
-		account = new Account(perHandleData, perIoData);
-		inet_ntop(AF_INET, &clientAddr, account->IP, INET_ADDRSTRLEN);
-		account->PORT = ntohs(clientAddr.sin_port);
-		accounts.insert(account);
-
-		account->recvMsg();
-
-		Sleep(5000);
-	}
 	_getch();
 	return 0;
 }
 
+void newClientConnect(LPPER_HANDLE_DATA perHandleData, LPPER_IO_OPERATION_DATA perIoData, string ip, int port) {
+	account = new Account(perHandleData, perIoData);
+	account->IP = ip;
+	account->PORT = port;
+	accounts.insert(account);
+	account->recvMsg();
+}
 
+void clientDisconnect(Account *account) {
+	CloseHandle(account->mutex);
+	accounts.erase(account);
+	while (!account->requests.empty()) account->requests.pop();
+	while (!account->messagesNeesToSend.empty()) account->messagesNeesToSend.pop();
+	closesocket(account->perHandleData->socket);
+	delete account;
+}
 
-unsigned __stdcall serverWorkerThread(LPVOID completionPortID)
-{
-	printf("Thread %d start!\n", GetCurrentThreadId());
+void receiveMessage(Account* account, char* msg, int length) {
 
-	HANDLE completionPort = (HANDLE)completionPortID;
+	messageToRequest(msg, account->restMessage, account->requests);
 
-	DWORD transferredBytes;
-	LPPER_HANDLE_DATA perHandleData;
-	LPPER_IO_OPERATION_DATA perIoData;
-	Account *account = NULL;
-
-	while (TRUE) {
-		if (account != NULL) {
-			account->lock();
-			account->waiting = true;
-			account->unlock();
-		}
-
-		if (GetQueuedCompletionStatus(completionPort, &transferredBytes,
-			(LPDWORD)&perHandleData, (LPOVERLAPPED *)&perIoData, INFINITE) == 0) {
-			printf("GetQueuedCompletionStatus() failed with error %d\n", GetLastError());
-			continue;
-		}
-
-		account = findAccount(perHandleData);
-		if (account == NULL) continue;
-
-		account->lock();
-		account->waiting = false;
-
-		// Check to see if an error has occurred on the socket and if so
-		// then close the socket and cleanup the SOCKET_INFORMATION structure
-		// associated with the socket
-		if (transferredBytes == 0 && perIoData->operation != SEND) {
-			printf("Closing socket %d\n", perHandleData->socket);
-			GlobalFree(perHandleData);
-			GlobalFree(perIoData);
-			deleteAccount(account);
-			continue;
-		}
-
-		
-
-		if (perIoData->operation == RECEIVE) {
-			account->numberInQueue -= 1;
-			// process received message here
-			perIoData->dataBuff.buf[transferredBytes] = 0;
-			saveMessage(perIoData->dataBuff.buf, account->restMessage, account->requests);
-
-			if (account->requests.empty() && account->numberInQueue <= 0) {
-				account->recvMsg();
-			} 
-
-			while (!account->requests.empty()) {
-				Message request = account->requests.front();
-				account->requests.pop();
-				cout << "Recv: " << request.toMessageSend() << endl;
-				if (request.command == RESPONSE_TO_SERVER) {
-					solveResponseFromClient(account, request);
-				}
-				else {
-					solveRequest(account, request);
-				} 
-			}
-		}
-		else if (perIoData->operation == SEND) {
-			perIoData->sentBytes += transferredBytes;
-
-			if (account->canContinuteSendMsg()) {
-				account->continuteSendMsg();
-			}
-			else if (account->canSendNewMsg()) {
-				account->sendNewMsg();
-			}
-			else if (account->numberInQueue <= 0) {
-				cout << "Sent" << endl;
-				account->recvMsg();
-			}
-		}
-
-		account->unlock();
+	if (account->requests.empty() && account->numberReceiveInQueue <= 0) {
+		account->recvMsg();
 	}
 
-	printf("Thread %d stop!\n", GetCurrentThreadId());
+	while (!account->requests.empty()) {
+		Message request = account->requests.front();
+		account->requests.pop();
+		cout << "Recv: " << request.toMessageSend() << endl;
+		if (request.command == RESPONSE_TO_SERVER) {
+			solveResponseFromClient(account, request);
+		}
+		else {
+			solveRequest(account, request);
+		}
+	}
 }
 
 
@@ -326,7 +200,7 @@ void deleteAccount(Account *account) {
 *
 * @param: a message brings result code
 **/
-void solveReqLogin(Account *account, Message &request) {
+void solveLoginReq(Account *account, Message &request) {
 	Message response(RESPONSE_TO_CLIENT, reform(UNDENTIFIED, SIZE_RESPONSE_CODE));
 	string content = request.content;
 	size_t found = content.find("$");
@@ -336,7 +210,7 @@ void solveReqLogin(Account *account, Message &request) {
 	//if the account already logged 
 	if (database->login(username, password)) {
 		account->username = username;
-		response.content = reform(LOGIN_SUCCESSFUL, SIZE_RESPONSE_CODE);
+		response.content = reform(S2C_LOGIN_SUCCESSFUL, SIZE_RESPONSE_CODE);
 		vector<Player> listFr = database->getListFriend(database->getPlayerByName(account->username));
 		int i = 0;
 		string listFrReform = "";
@@ -348,14 +222,12 @@ void solveReqLogin(Account *account, Message &request) {
 
 		Message ms1(RESPONSE_TO_CLIENT, listFrReform);
 
-		cout << "Pending send: " << response.toMessageSend() << ms1.toMessageSend() << endl;
-
-		account->addMessageNeedToSend(response); // send response
-		account->addMessageNeedToSend(ms1); // send list friend
+		account->send(response); // send response
+		account->send(ms1); // send list friend
 	}
 	else {
-		account->addMessageNeedToSend(response);
-		response.content = reform(LOGIN_FAIL, SIZE_RESPONSE_CODE);
+		account->send(response);
+		response.content = reform(S2C_LOGIN_FAIL, SIZE_RESPONSE_CODE);
 	}
 
 }
@@ -368,20 +240,20 @@ void solveReqLogin(Account *account, Message &request) {
 *
 * @param: a message brings result code
 **/
-void solveReqLogout(Account *account, Message &request) {
+void solveLogoutReq(Account *account, Message &request) {
 	Message response(RESPONSE_TO_CLIENT, reform(UNDENTIFIED, SIZE_RESPONSE_CODE));
 
 	if (account->signInStatus == NOT_LOGGED) {
-		response.content = reform(UNDENTIFIED, LOGOUT_FAIL);
-		saveLog(account, request, LOGOUT_FAIL);
+		response.content = reform(UNDENTIFIED, S2C_LOGOUT_FAIL);
+		saveLog(account, request, S2C_LOGOUT_FAIL);
 	}
 	else {
 		account->signInStatus = NOT_LOGGED;
-		response.content = reform(UNDENTIFIED, LOGOUT_SUCCESSFUL);
-		saveLog(account, request, LOGOUT_SUCCESSFUL);
+		response.content = reform(UNDENTIFIED, S2C_LOGOUT_SUCCESSFUL);
+		saveLog(account, request, S2C_LOGOUT_SUCCESSFUL);
 	}
 
-	account->addMessageNeedToSend(response);
+	account->send(response);
 
 }
 
@@ -389,19 +261,22 @@ void solveReqLogout(Account *account, Message &request) {
 /**Solve Register Account request**/
 void solveReqRegisterAccount(Account *account, Message &request) {
 	Message response(RESPONSE_TO_CLIENT, reform(UNDENTIFIED, SIZE_RESPONSE_CODE));
-
-	if (solveReqRegisterAccount(request)) {
-		response.content = reform(REGISTER_SUCCESSFUL, SIZE_RESPONSE_CODE);
+	size_t found = request.content.find("$");
+	string username = request.content.substr(0, found);
+	string password = request.content.substr(found + 1);
+	
+	if (database->registerAccount(username, password)) {
+		response.content = reform(S2C_REGISTER_SUCCESSFUL, SIZE_RESPONSE_CODE);
 	}
 	else {
-		response.content = reform(REGISTER_FAIL, SIZE_RESPONSE_CODE);
+		response.content = reform(S2C_REGISTER_FAIL, SIZE_RESPONSE_CODE);
 	}
 
 }
 
 
 /**Solve Get List request**/
-void solveReqGetListFriend(Account *account, Message &request) {
+void solveGetListFriendReq(Account *account, Message &request) {
 	Message response(RESPONSE_TO_CLIENT, reform(UNDENTIFIED, SIZE_RESPONSE_CODE));
 
 	vector<Player> listFr = database->getListFriend(database->getPlayerByName(account->username));
@@ -414,30 +289,30 @@ void solveReqGetListFriend(Account *account, Message &request) {
 		if (i != listFr.size()) listFrReform += "$";
 	}
 
-	response.content = reform(GET_LIST_FRIEND_SUCCESSFUL, SIZE_RESPONSE_CODE) + listFrReform;
+	response.content = reform(S2C_GET_LIST_FRIEND_SUCCESSFUL, SIZE_RESPONSE_CODE) + listFrReform;
 
-	account->addMessageNeedToSend(response);
+	account->send(response);
 
 }
 
 
 /**Solve Add Friend request**/
-void solveReqSendFriendInvitation(Account *account, Message &request) {
+void solveSendFriendInvitationReq(Account *account, Message &request) {
 	Message response(RESPONSE_TO_CLIENT, reform(UNDENTIFIED, SIZE_RESPONSE_CODE));
 
 	SOCKET sock = account->perHandleData->socket;
 
 	if (sock == NULL) {
-		response.content = reform(SEND_FRIEND_INVITATION_FAIL, SIZE_RESPONSE_CODE);
-		account->addMessageNeedToSend(response);
+		response.content = reform(S2C_SEND_FRIEND_INVITATION_FAIL, SIZE_RESPONSE_CODE);
+		account->send(response);
 	}
 	else {
-		Message requestToFr(SREQ_SEND_FRIEND_INVITATION, account->username);
+		Message requestToFr(S2C_SEND_FRIEND_INVITATION, account->username);
 
-		response.content = reform(SEND_FRIEND_INVITATION_SUCCESSFUL, SIZE_RESPONSE_CODE);
+		response.content = reform(S2C_SEND_FRIEND_INVITATION_SUCCESSFUL, SIZE_RESPONSE_CODE);
 
-		account->addMessageNeedToSend(response);
-		account->addMessageNeedToSend(requestToFr);
+		account->send(response);
+		account->send(requestToFr);
 	}
 
 
@@ -445,22 +320,22 @@ void solveReqSendFriendInvitation(Account *account, Message &request) {
 
 
 /**Solve Challenge request**/
-void solveReqSendChallengeInvitation(Account *account, Message &request) {
+void solveSendChallengeInvitationReq(Account *account, Message &request) {
 	Message response(RESPONSE_TO_CLIENT, reform(UNDENTIFIED, SIZE_RESPONSE_CODE));
 
 	SOCKET sock = account->perHandleData->socket;
 
 	if (sock == NULL) {
-		response.content = reform(SEND_CHALLENGE_INVITATION_FAIL, SIZE_RESPONSE_CODE);
-		account->addMessageNeedToSend(response);
+		response.content = reform(S2C_SEND_CHALLENGE_INVITATION_FAIL, SIZE_RESPONSE_CODE);
+		account->send(response);
 	}
 	else {
-		Message requestToFr(SREQ_SEND_CHALLENGE_INVITATION, account->username);
+		Message requestToFr(S2C_SEND_CHALLENGE_INVITATION, account->username);
 
 
-		response.content = reform(SEND_CHALLENGE_INVITATION_SUCCESSFUL, SIZE_RESPONSE_CODE);
-		account->addMessageNeedToSend(response);
-		account->addMessageNeedToSend(requestToFr);
+		response.content = reform(S2C_SEND_CHALLENGE_INVITATION_SUCCESSFUL, SIZE_RESPONSE_CODE);
+		account->send(response);
+		account->send(requestToFr);
 	}
 
 
@@ -476,7 +351,7 @@ void getLog(Account *account, Message &request) {
 
 
 /**Solve Chat request**/
-void solveReqChat(Account *account, Message &request) {
+void solveChatReq(Account *account, Message &request) {
 	Message response(RESPONSE_TO_CLIENT, reform(UNDENTIFIED, SIZE_RESPONSE_CODE));
 
 
@@ -490,13 +365,13 @@ void solveResAcceptFriendInvitation(Account *account, Message &response) {
 	SOCKET sock = account->perHandleData->socket;
 
 	if (sock == NULL) {
-		resp.content = reform(SEND_FRIEND_INVITATION_FAIL, SIZE_RESPONSE_CODE);
+		resp.content = reform(S2C_SEND_FRIEND_INVITATION_FAIL, SIZE_RESPONSE_CODE);
 
 	}
 	else {
-		Message requestToFr(ACCEPT_FRIEND_INVITATION, account->username);
+		Message requestToFr(C2S_ACCEPT_FRIEND_INVITATION, account->username);
 
-		resp.content = reform(SEND_FRIEND_INVITATION_SUCCESSFUL, SIZE_RESPONSE_CODE);
+		resp.content = reform(S2C_SEND_FRIEND_INVITATION_SUCCESSFUL, SIZE_RESPONSE_CODE);
 	}
 
 }
@@ -507,12 +382,12 @@ void solveResDenyFriendInvitation(Account *account, Message &response) {
 	Message resp(RESPONSE_TO_CLIENT, reform(UNDENTIFIED, SIZE_RESPONSE_CODE));
 
 	if (sock == NULL) {
-		resp.content = reform(SEND_FRIEND_INVITATION_FAIL, SIZE_RESPONSE_CODE);
+		resp.content = reform(S2C_SEND_FRIEND_INVITATION_FAIL, SIZE_RESPONSE_CODE);
 	}
 	else {
-		Message requestToFr(DENY_FRIEND_INVITATION, account->username);
+		Message requestToFr(C2S_DENY_FRIEND_INVITATION, account->username);
 
-		resp.content = reform(SEND_FRIEND_INVITATION_SUCCESSFUL, SIZE_RESPONSE_CODE);
+		resp.content = reform(S2C_SEND_FRIEND_INVITATION_SUCCESSFUL, SIZE_RESPONSE_CODE);
 	}
 
 
@@ -524,12 +399,12 @@ void solveResAcceptChallengeInvitation(Account *account, Message &response) {
 	Message resp(RESPONSE_TO_CLIENT, reform(UNDENTIFIED, SIZE_RESPONSE_CODE));
 
 	if (sock == NULL) {
-		resp.content = reform(SEND_CHALLENGE_INVITATION_FAIL, SIZE_RESPONSE_CODE);
+		resp.content = reform(S2C_SEND_CHALLENGE_INVITATION_FAIL, SIZE_RESPONSE_CODE);
 	}
 	else {
-		Message requestToFr(ACCEPT_CHALLENGE_INVITATION, account->username);
+		Message requestToFr(C2S_ACCEPT_CHALLENGE_INVITATION, account->username);
 
-		resp.content = reform(SEND_CHALLENGE_INVITATION_SUCCESSFUL, SIZE_RESPONSE_CODE);
+		resp.content = reform(S2C_SEND_CHALLENGE_INVITATION_SUCCESSFUL, SIZE_RESPONSE_CODE);
 	}
 
 }
@@ -540,11 +415,11 @@ void solveResDenyChallengInvitation(Account *account, Message &response) {
 	Message resp(RESPONSE_TO_CLIENT, reform(UNDENTIFIED, SIZE_RESPONSE_CODE));
 
 	if (sock == NULL) {
-		resp.content = reform(SEND_CHALLENGE_INVITATION_FAIL, SIZE_RESPONSE_CODE);
+		resp.content = reform(S2C_SEND_CHALLENGE_INVITATION_FAIL, SIZE_RESPONSE_CODE);
 	}
 	else {
-		Message requestToFr(DENY_CHALLENGE_INVITATION, account->username);
-		resp.content = reform(SEND_CHALLENGE_INVITATION_SUCCESSFUL, SIZE_RESPONSE_CODE);
+		Message requestToFr(C2S_DENY_CHALLENGE_INVITATION, account->username);
+		resp.content = reform(S2C_SEND_CHALLENGE_INVITATION_SUCCESSFUL, SIZE_RESPONSE_CODE);
 	}
 }
 
@@ -553,7 +428,7 @@ void solveResDenyChallengInvitation(Account *account, Message &response) {
 ///////////////////////////// In Gamme /////////////////////////////
 
 /**Solve Stop Match request**/
-void solveReqStopMatch(Account *account, Message &request) {
+void solveStopMatchReq(Account *account, Message &request) {
 	Message response(RESPONSE_TO_CLIENT, reform(UNDENTIFIED, SIZE_RESPONSE_CODE));
 	//
 	// get database
@@ -566,7 +441,7 @@ void solveReqStopMatch(Account *account, Message &request) {
 
 
 /**Solve Play request**/
-void solveReqPlay(Account *account, Message &request) {
+void solvePlayReq(Account *account, Message &request) {
 	Message response(RESPONSE_TO_CLIENT, reform(UNDENTIFIED, SIZE_RESPONSE_CODE));
 
 }
@@ -598,32 +473,32 @@ void sloveResRecivedRequestStartGame(Account *account, Message &request) {
 **/
 void solveRequest(Account *account, Message &request) {
 	switch (request.command) {
-	case CREQ_LOGIN:
-		solveReqLogin(account, request);
+	case C2S_LOGIN:
+		solveLoginReq(account, request);
 		break;
-	case CREQ_LOGOUT:
-		solveReqLogout(account, request);
+	case C2S_LOGOUT:
+		solveLogoutReq(account, request);
 		break;
-	case CREQ_REGISTER:
+	case C2S_REGISTER:
 		solveReqRegisterAccount(account, request);
 		break;
-	case CREQ_GET_LIST_FRIEND:
-		solveReqGetListFriend(account, request);
+	case C2S_GET_LIST_FRIEND:
+		solveGetListFriendReq(account, request);
 		break;
-	case CREQ_SEND_FRIEND_INVITATION:
-		solveReqSendFriendInvitation(account, request);
+	case C2S_SEND_FRIEND_INVITATION:
+		solveSendFriendInvitationReq(account, request);
 		break;
-	case CREQ_SEND_CHALLENGE_INVITATION:
-		solveReqSendChallengeInvitation(account, request);
+	case C2S_SEND_CHALLENGE_INVITATION:
+		solveSendChallengeInvitationReq(account, request);
 		break;
-	case CREQ_STOP_GAME:
-		solveReqStopMatch(account, request);
+	case C2S_STOP_GAME:
+		solveStopMatchReq(account, request);
 		break;
-	case CREQ_PLAY:
-		solveReqPlay(account, request);
+	case C2S_PLAY:
+		solvePlayReq(account, request);
 		break;
-	case CREQ_CHAT:
-		solveReqChat(account, request);
+	case C2S_CHAT:
+		solveChatReq(account, request);
 		break;
 	default:
 		saveLog(account, request, UNDENTIFIED);
@@ -636,27 +511,27 @@ void solveResponseFromClient(Account *account, Message &response) {
 
 	if (statusCode == 0) {
 		Message resp(RESPONSE_TO_CLIENT, reform(UNDENTIFIED, SIZE_RESPONSE_CODE));
-		account->addMessageNeedToSend(resp);
+		account->send(resp);
 		return;
 	};
 
 	switch (statusCode) {
-	case ACCEPT_FRIEND_INVITATION:
+	case C2S_ACCEPT_FRIEND_INVITATION:
 		solveResAcceptFriendInvitation(account, response);
 		break;
-	case DENY_FRIEND_INVITATION:
+	case C2S_DENY_FRIEND_INVITATION:
 		solveResDenyFriendInvitation(account, response);
 		break;
-	case ACCEPT_CHALLENGE_INVITATION:
+	case C2S_ACCEPT_CHALLENGE_INVITATION:
 		solveResAcceptChallengeInvitation(account, response);
 		break;
-	case DENY_CHALLENGE_INVITATION:
+	case C2S_DENY_CHALLENGE_INVITATION:
 		solveResDenyChallengInvitation(account, response);
 		break;
-	case RECEIVED_REQUEST_START_GAME:
+	case C2S_RECEIVED_REQUEST_START_GAME:
 		sloveResRecivedRequestStartGame(account, response);
 		break;
-	case RECEIVED_REQUEST_END_GAME:
+	case C2S_RECEIVED_REQUEST_END_GAME:
 		break;
 	}
 

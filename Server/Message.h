@@ -53,7 +53,7 @@ bool check(string &msg_rcv) {
 * @param restMessage: the rest of message
 * @param requests: the queue of request
 **/
-void saveMessage(string tmp, string &restMessage, std::queue<Message> &requests) {
+void messageToRequest(string tmp, string &restMessage, std::queue<Message> &requests) {
 	Message request;
 	restMessage += tmp;
 	tmp = restMessage;
