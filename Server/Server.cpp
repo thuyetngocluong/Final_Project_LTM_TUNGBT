@@ -99,6 +99,7 @@ HANDLE mutexSendingRequest;
 
 Data *database;
 
+int x = 10;
 
 int _tmain(int argc, _TCHAR* argv[])
 {
