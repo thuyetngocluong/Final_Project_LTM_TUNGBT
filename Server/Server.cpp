@@ -34,6 +34,9 @@ using namespace std;
 #define RECEIVE 0
 #define SEND 1
 
+int x = 10;
+int y = 20;
+string anh = "Ngao";
 
 // Structure definition
 typedef struct {
