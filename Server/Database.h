@@ -13,6 +13,7 @@ class Data {
 
 private:
 	SAConnection conn;
+	HANDLE mutex;
 	Data() {
 		try {
 			conn.Connect(_TSA(DB), _TSA(USER), _TSA(PASS), SA_MySQL_Client);
@@ -21,11 +22,11 @@ private:
 			conn.Rollback();
 			printf("%s\n", x.ErrText().GetMultiByteChars());
 		}
+
+		mutex = CreateMutex(0, 0, 0);
 	}
 
-
-
-
+	
 public:
 	Data(Data &other) = delete;
 
@@ -85,6 +86,7 @@ public:
 	}
 
 	void updateElo(string ofUsername, long elo) {
+		WaitForSingleObject(mutex, 5000);
 		SACommand update(&conn);
 		try {
 			string sql = "UPDATE account SET elo = " + to_string(elo) + " WHERE username like '" + ofUsername + "'";
@@ -99,6 +101,8 @@ public:
 			printf("%s\n", x.ErrText().GetMultiByteChars());
 			update.Close();
 		}
+
+		ReleaseMutex(mutex);
 	}
 
 	vector<Player> getListFriend(Player player) {
@@ -176,6 +180,7 @@ public:
 	}
 
 	vector<Player> getListPlayerCanChallenge(string player) {
+
 		SACommand query(&conn);
 		vector<Player> rs;
 		try {
@@ -205,6 +210,7 @@ public:
 	}
 
 	bool registerAccount(string username, string password) {
+		WaitForSingleObject(mutex, 5000);
 		bool successful = false;
 		SACommand insert(&conn);
 
@@ -223,6 +229,7 @@ public:
 			printf("%s\n", x.ErrText().GetMultiByteChars());
 			insert.Close();
 		}
+		ReleaseMutex(mutex);
 		return successful;
 	}
 };

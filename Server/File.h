@@ -11,7 +11,35 @@
 #define SAVE_SUCCESSFUL true
 #define SAVE_FAIL false
 
+struct File {
+	int opcode;
+	int length;
+	char *payload;
+	
+	File(int _opcode, int _length, char* _payload) {
+		this->opcode = _opcode;
+		this->length = _length;
+		this->payload = _payload;
+	}
 
+	char *toCharArray() {
+		char *msg = new char[3 + 8 + length];
+		int index = 0;
+		string opStr = to_string(opcode);
+		string lengthStr = to_string(length);
+		reform(opStr, 3);
+		reform(lengthStr, 8);
+		copy(msg, index, opStr, 3);
+		index += 3;
+
+		copy(msg, index, lengthStr, 8);
+		index += 8;
+
+		copy(msg, index, payload, length);
+
+		return msg;
+	}
+};
 /*
 * @function getStatus: get status of username
 * @param request: message brings username

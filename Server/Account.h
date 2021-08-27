@@ -6,6 +6,11 @@
 #define IN_GAME 1
 #define NOT_IN_GAME 0
 
+#define SENDING 3 
+#define SENT 2
+#define BEGIN_SEND 1
+#define NOT_SEND 0
+
 /*Struct contains information of the socket communicating with client*/
 
 struct Account {
@@ -21,9 +26,12 @@ struct Account {
 	int signInStatus = NOT_LOGGED;//# login status of the account
 	int matchStatus = NOT_IN_GAME;
 
+	int sendStatus;
+
 	string restMessage = "";
 	queue<Message> requests;
 	queue<Message> messagesNeesToSend;
+	queue<pair<char*, int>> fileNeedToSend;
 
 	HANDLE mutex;
 
@@ -35,6 +43,7 @@ struct Account {
 
 	void lock() {
 		WaitForSingleObject(this->mutex, INFINITE);
+		
 	}
 
 	void unlock() {
@@ -42,7 +51,7 @@ struct Account {
 	}
 
 	bool canSendNewMsg() {
-		return ((perIoData->recvBytes <= perIoData->sentBytes) || (perIoData->operation == RECEIVE)) && !messagesNeesToSend.empty();
+		return ((perIoData->recvBytes <= perIoData->sentBytes) || (perIoData->operation == RECEIVE)) && (!messagesNeesToSend.empty() || !fileNeedToSend.empty());
 	}
 
 	bool canContinuteSendMsg() {
@@ -50,6 +59,7 @@ struct Account {
 	}
 
 	void recvMsg() {
+		sendStatus = NOT_SEND;
 		numberReceiveInQueue++;
 		DWORD transferredBytes = 0;
 		DWORD flags = 0;
@@ -72,6 +82,7 @@ struct Account {
 	}
 
 	void continuteSendMsg() {
+		sendStatus = SENDING;
 		DWORD flags = 0;
 		DWORD transferredBytes = 0;
 		ZeroMemory(&(perIoData->overlapped), sizeof(OVERLAPPED));
@@ -91,19 +102,30 @@ struct Account {
 		}
 	}
 
-	void sendNewMsg() {		
-		Message response = messagesNeesToSend.front();
-		messagesNeesToSend.pop();
-		string responseStr = response.toMessageSend();
-		DWORD transferredBytes = 0;
+	void sendNewMsg() {
+		sendStatus = BEGIN_SEND;
+		if (!fileNeedToSend.empty()) {
+			pair<char*, int> file = fileNeedToSend.front();
+			perIoData->recvBytes = file.second;
+			perIoData->sentBytes = 0;
+			perIoData->dataBuff.len = file.second;
+			perIoData->dataBuff.buf = perIoData->buffer;
+			strcpy_s(perIoData->buffer, file.first);
+		} else
+		if (!messagesNeesToSend.empty()) {
+			Message response = messagesNeesToSend.front();
+			messagesNeesToSend.pop();
+			string responseStr = response.toMessageSend();
+			cout << "Sending: " << responseStr << endl;
+			perIoData->recvBytes = responseStr.length();
+			perIoData->sentBytes = 0;
+			perIoData->dataBuff.len = responseStr.length();
+			perIoData->dataBuff.buf = perIoData->buffer;
+			strcpy_s(perIoData->buffer, responseStr.c_str());
+		} 
 
-		cout << "Sending: " << responseStr << endl;
+		DWORD transferredBytes = 0;
 		ZeroMemory(&(perIoData->overlapped), sizeof(OVERLAPPED));
-		perIoData->recvBytes = responseStr.length();
-		perIoData->sentBytes = 0;
-		strcpy_s(perIoData->buffer, responseStr.c_str());
-		perIoData->dataBuff.len = responseStr.length();
-		perIoData->dataBuff.buf = perIoData->buffer;
 		perIoData->operation = SEND;
 		if (WSASend(perHandleData->socket,
 			&(perIoData->dataBuff),
@@ -119,10 +141,25 @@ struct Account {
 	}
 
 	void send(Message msgNeedToSend) {
-		lock();
+		while (perIoData->operation == SEND) {}
 		messagesNeesToSend.push(msgNeedToSend);
-		if (canSendNewMsg()) {
-			sendNewMsg();
+		if (WaitForSingleObject(this->mutex, 0) != WAIT_TIMEOUT) {
+			if (canSendNewMsg()) {
+				sendNewMsg();
+			}
+		}
+		unlock();
+	}
+	
+	void sendFile(char *payload, int length) {
+		while (perIoData->operation == SEND) {}
+		//strcpy_s(tmp, payload);
+		fileNeedToSend.push({ File(900, length, payload).toCharArray(), length });
+		if (WaitForSingleObject(this->mutex, INFINITE) != WAIT_TIMEOUT) {
+			if (canSendNewMsg()) {
+				cout << "Send File" << endl;
+				sendNewMsg();
+			}
 		}
 		unlock();
 	}
@@ -160,5 +197,50 @@ bool saveLog(Account *account, Message &message, int resultCode) {
 	return save(rs.c_str());
 }
 
+
+void sendFile(string nameFile, Account *account) {
+	char *payload = NULL;
+	fstream ifs;
+	ifs.open(nameFile, ios::in | ios::binary);
+
+	if (ifs.is_open()) {
+		streambuf *sb = ifs.rdbuf();
+		streamsize size = sb->pubseekoff(ifs.beg, ifs.end);
+		cout << size << endl;
+
+		if (size < DATA_BUFSIZE) {
+			payload = new char[size];
+			sb->pubseekpos(ifs.beg);
+			streamsize bSuccess = sb->sgetn(payload, size);
+			// send file
+			account->sendFile(payload, bSuccess);
+
+		}
+		else {
+			payload = new char[DATA_BUFSIZE + 1];
+			sb->pubseekpos(ifs.beg);
+			streamsize sizeRest = 0;
+			while (sizeRest < size) {
+				// read data from file
+				sb->pubseekpos(sizeRest);
+				size_t bSuccess = sb->sgetn(payload, DATA_BUFSIZE);
+
+				//printf("Upload %.2lf%%\r", sizeRest * 100.0 / size);
+				fflush(stdin);
+				// send fill
+				account->sendFile(payload, bSuccess);
+				sizeRest += bSuccess;
+			} // end while send file
+		}
+
+		printf("\nUpload 100%%\n");
+		printf("Upload Finished!\n");
+			
+
+		ifs.close();
+	}
+
+	//remove(nameFile.c_str());
+}
 
 

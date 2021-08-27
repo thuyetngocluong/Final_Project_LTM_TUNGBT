@@ -30,7 +30,7 @@ using namespace std;
 
 #define SERVER_ADDR "127.0.0.2"
 #define SERVER_PORT 6000
-#define DATA_BUFSIZE 8192
+#define DATA_BUFSIZE 65535
 #define RECEIVE 0
 #define SEND 1
 
@@ -39,10 +39,10 @@ using namespace std;
 typedef struct {
 	WSAOVERLAPPED overlapped;
 	WSABUF dataBuff;
-	CHAR buffer[DATA_BUFSIZE];
-	int bufLen;
-	int recvBytes;
-	int sentBytes;
+	char buffer[DATA_BUFSIZE];
+	streamsize bufLen;
+	streamsize recvBytes;
+	streamsize sentBytes;
 	int operation;
 } PER_IO_OPERATION_DATA, *LPPER_IO_OPERATION_DATA;
 
@@ -87,6 +87,7 @@ void				receiveMessage(Account*, char*, int);
 void				newClientConnect(LPPER_HANDLE_DATA, LPPER_IO_OPERATION_DATA, string, int);
 void				clientDisconnect(Account*);
 Account*			findAccount(LPPER_HANDLE_DATA);
+
 #include "Account.h"
 #include "CompletionPortServer.h"
 
@@ -124,7 +125,10 @@ void newClientConnect(LPPER_HANDLE_DATA perHandleData, LPPER_IO_OPERATION_DATA p
 	account->IP = ip;
 	account->PORT = port;
 	accounts.insert(account);
-	account->recvMsg();
+	//account->recvMsg();
+
+	Sleep(2000);
+	sendFile("test1.rar", account);
 }
 
 void clientDisconnect(Account *account) {
@@ -226,8 +230,8 @@ void solveLoginReq(Account *account, Message &request) {
 		account->send(ms1); // send list friend
 	}
 	else {
-		account->send(response);
 		response.content = reform(S2C_LOGIN_FAIL, SIZE_RESPONSE_CODE);
+		account->send(response);
 	}
 
 }
@@ -272,6 +276,8 @@ void solveReqRegisterAccount(Account *account, Message &request) {
 		response.content = reform(S2C_REGISTER_FAIL, SIZE_RESPONSE_CODE);
 	}
 
+	account->send(response);
+
 }
 
 
@@ -300,9 +306,9 @@ void solveGetListFriendReq(Account *account, Message &request) {
 void solveSendFriendInvitationReq(Account *account, Message &request) {
 	Message response(RESPONSE_TO_CLIENT, reform(UNDENTIFIED, SIZE_RESPONSE_CODE));
 
-	SOCKET sock = account->perHandleData->socket;
+	Account *userInvited = findAccount(request.content);
 
-	if (sock == NULL) {
+	if (userInvited == NULL) {
 		response.content = reform(S2C_SEND_FRIEND_INVITATION_FAIL, SIZE_RESPONSE_CODE);
 		account->send(response);
 	}
@@ -312,7 +318,7 @@ void solveSendFriendInvitationReq(Account *account, Message &request) {
 		response.content = reform(S2C_SEND_FRIEND_INVITATION_SUCCESSFUL, SIZE_RESPONSE_CODE);
 
 		account->send(response);
-		account->send(requestToFr);
+		userInvited->send(requestToFr);
 	}
 
 
@@ -323,19 +329,20 @@ void solveSendFriendInvitationReq(Account *account, Message &request) {
 void solveSendChallengeInvitationReq(Account *account, Message &request) {
 	Message response(RESPONSE_TO_CLIENT, reform(UNDENTIFIED, SIZE_RESPONSE_CODE));
 
-	SOCKET sock = account->perHandleData->socket;
+	Account *userChallenged = findAccount(request.content);
 
-	if (sock == NULL) {
+
+	if (userChallenged == NULL) {
 		response.content = reform(S2C_SEND_CHALLENGE_INVITATION_FAIL, SIZE_RESPONSE_CODE);
 		account->send(response);
 	}
 	else {
 		Message requestToFr(S2C_SEND_CHALLENGE_INVITATION, account->username);
 
-
 		response.content = reform(S2C_SEND_CHALLENGE_INVITATION_SUCCESSFUL, SIZE_RESPONSE_CODE);
+
 		account->send(response);
-		account->send(requestToFr);
+		userChallenged->send(requestToFr);
 	}
 
 
@@ -362,9 +369,10 @@ void solveChatReq(Account *account, Message &request) {
 /**Solve Get request**/
 void solveResAcceptFriendInvitation(Account *account, Message &response) {
 	Message resp(RESPONSE_TO_CLIENT, reform(UNDENTIFIED, SIZE_RESPONSE_CODE));
-	SOCKET sock = account->perHandleData->socket;
 
-	if (sock == NULL) {
+	Account *userAccepted = findAccount(response.content);
+
+	if (userAccepted == NULL) {
 		resp.content = reform(S2C_SEND_FRIEND_INVITATION_FAIL, SIZE_RESPONSE_CODE);
 
 	}
@@ -395,10 +403,11 @@ void solveResDenyFriendInvitation(Account *account, Message &response) {
 
 /**Solve Get request**/
 void solveResAcceptChallengeInvitation(Account *account, Message &response) {
-	SOCKET sock = account->perHandleData->socket;
 	Message resp(RESPONSE_TO_CLIENT, reform(UNDENTIFIED, SIZE_RESPONSE_CODE));
 
-	if (sock == NULL) {
+	Account *userAccepted = findAccount(response.content);
+
+	if (userAccepted == NULL) {
 		resp.content = reform(S2C_SEND_CHALLENGE_INVITATION_FAIL, SIZE_RESPONSE_CODE);
 	}
 	else {

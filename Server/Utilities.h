@@ -48,19 +48,32 @@ string getCurrentDateTime() {
 	return result;
 }
 
-/*
-* @function isNumber: Check if a string is a number or not
-* @param s: string needs to be check
-*
-* @return true if string is a number, false if string not a number
-**/
-bool isNumber(char *s) {
-	int i = 0;
 
-	while (s[i] != '\0') {
-		if (isdigit(s[i]) == false) return false;
-		i++;
+void writeFile(string nameFile, char *content, int length) {
+	fstream file;
+	file.open(nameFile, ios::binary || ios::app || ios::out);
+	if (file.is_open()) {
+		content[length] = '\0';
+		file << content << endl;
+		file.close();
 	}
+}
 
-	return true;
+void copy(char *dest, int posDest, char* src, int lengthSrc) {
+	for (int i = posDest; i < posDest + lengthSrc; i++) {
+		dest[i] = src[i - posDest];
+	}
+}
+
+/*
+* @function copy: copy all characters from src to dest
+* @param dest: array of chars destination
+* @param posDest: position to start copy of array of chars destination
+* @param src: string need to copy
+* @param lengthSrc: length of src
+**/
+void copy(char *dest, int posDest, string src, int lengthSrc) {
+	for (int i = posDest; i < posDest + lengthSrc; i++) {
+		dest[i] = src.at(i - posDest);
+	}
 }
