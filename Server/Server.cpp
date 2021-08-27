@@ -102,8 +102,12 @@ HANDLE mutexSendingRequest;
 
 Data *database;
 
+<<<<<<< HEAD
 int x = 20;
 string thuyet = "Anh";
+=======
+int x = 10;
+>>>>>>> thuyetln
 
 int _tmain(int argc, _TCHAR* argv[])
 {
