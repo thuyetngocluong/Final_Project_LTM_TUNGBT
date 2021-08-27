@@ -36,6 +36,7 @@ using namespace std;
 
 int x = 10;
 int y = 20;
+string anh = "Ngao";
 
 // Structure definition
 typedef struct {
