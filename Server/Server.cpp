@@ -1,4 +1,4 @@
-// SingleIOCPServer.cpp : Defines the entry point for the console application.
+﻿// SingleIOCPServer.cpp : Defines the entry point for the console application.
 //
 
 #include "stdafx.h"
@@ -30,7 +30,7 @@ using namespace std;
 
 #define SERVER_ADDR "127.0.0.2"
 #define SERVER_PORT 6000
-#define DATA_BUFSIZE 65535
+#define DATA_BUFSIZE 8192
 #define RECEIVE 0
 #define SEND 1
 
@@ -39,10 +39,10 @@ using namespace std;
 typedef struct {
 	WSAOVERLAPPED overlapped;
 	WSABUF dataBuff;
-	char buffer[DATA_BUFSIZE];
-	streamsize bufLen;
-	streamsize recvBytes;
-	streamsize sentBytes;
+	CHAR buffer[DATA_BUFSIZE];
+	int bufLen;
+	int recvBytes;
+	int sentBytes;
 	int operation;
 } PER_IO_OPERATION_DATA, *LPPER_IO_OPERATION_DATA;
 
@@ -75,7 +75,7 @@ void				solveChatReq(Account*, Message&);
 
 void				solveStopMatchReq(Account*, Message&);
 void				solvePlayReq(Account*, Message&);
-void				startGame(Match *match);
+void				startGame(Account *player1, Account *player2);
 void				endGame(Match *match);
 
 void				solveResponseFromClient(Account*, Message&);
@@ -87,7 +87,6 @@ void				receiveMessage(Account*, char*, int);
 void				newClientConnect(LPPER_HANDLE_DATA, LPPER_IO_OPERATION_DATA, string, int);
 void				clientDisconnect(Account*);
 Account*			findAccount(LPPER_HANDLE_DATA);
-
 #include "Account.h"
 #include "CompletionPortServer.h"
 
@@ -125,10 +124,7 @@ void newClientConnect(LPPER_HANDLE_DATA perHandleData, LPPER_IO_OPERATION_DATA p
 	account->IP = ip;
 	account->PORT = port;
 	accounts.insert(account);
-	//account->recvMsg();
-
-	//Sleep(2000);
-	//sendFile("test1.rar", account);
+	account->recvMsg();
 }
 
 void clientDisconnect(Account *account) {
@@ -230,8 +226,8 @@ void solveLoginReq(Account *account, Message &request) {
 		account->send(ms1); // send list friend
 	}
 	else {
-		response.content = reform(S2C_LOGIN_FAIL, SIZE_RESPONSE_CODE);
 		account->send(response);
+		response.content = reform(S2C_LOGIN_FAIL, SIZE_RESPONSE_CODE);
 	}
 
 }
@@ -276,8 +272,6 @@ void solveReqRegisterAccount(Account *account, Message &request) {
 		response.content = reform(S2C_REGISTER_FAIL, SIZE_RESPONSE_CODE);
 	}
 
-	account->send(response);
-
 }
 
 
@@ -306,9 +300,9 @@ void solveGetListFriendReq(Account *account, Message &request) {
 void solveSendFriendInvitationReq(Account *account, Message &request) {
 	Message response(RESPONSE_TO_CLIENT, reform(UNDENTIFIED, SIZE_RESPONSE_CODE));
 
-	Account *userInvited = findAccount(request.content);
+	SOCKET sock = account->perHandleData->socket;
 
-	if (userInvited == NULL) {
+	if (sock == NULL) {
 		response.content = reform(S2C_SEND_FRIEND_INVITATION_FAIL, SIZE_RESPONSE_CODE);
 		account->send(response);
 	}
@@ -318,7 +312,7 @@ void solveSendFriendInvitationReq(Account *account, Message &request) {
 		response.content = reform(S2C_SEND_FRIEND_INVITATION_SUCCESSFUL, SIZE_RESPONSE_CODE);
 
 		account->send(response);
-		userInvited->send(requestToFr);
+		account->send(requestToFr);
 	}
 
 
@@ -329,20 +323,19 @@ void solveSendFriendInvitationReq(Account *account, Message &request) {
 void solveSendChallengeInvitationReq(Account *account, Message &request) {
 	Message response(RESPONSE_TO_CLIENT, reform(UNDENTIFIED, SIZE_RESPONSE_CODE));
 
-	Account *userChallenged = findAccount(request.content);
+	SOCKET sock = account->perHandleData->socket;
 
-
-	if (userChallenged == NULL) {
+	if (sock == NULL) {
 		response.content = reform(S2C_SEND_CHALLENGE_INVITATION_FAIL, SIZE_RESPONSE_CODE);
 		account->send(response);
 	}
 	else {
 		Message requestToFr(S2C_SEND_CHALLENGE_INVITATION, account->username);
 
-		response.content = reform(S2C_SEND_CHALLENGE_INVITATION_SUCCESSFUL, SIZE_RESPONSE_CODE);
 
+		response.content = reform(S2C_SEND_CHALLENGE_INVITATION_SUCCESSFUL, SIZE_RESPONSE_CODE);
 		account->send(response);
-		userChallenged->send(requestToFr);
+		account->send(requestToFr);
 	}
 
 
@@ -369,10 +362,9 @@ void solveChatReq(Account *account, Message &request) {
 /**Solve Get request**/
 void solveResAcceptFriendInvitation(Account *account, Message &response) {
 	Message resp(RESPONSE_TO_CLIENT, reform(UNDENTIFIED, SIZE_RESPONSE_CODE));
+	SOCKET sock = account->perHandleData->socket;
 
-	Account *userAccepted = findAccount(response.content);
-
-	if (userAccepted == NULL) {
+	if (sock == NULL) {
 		resp.content = reform(S2C_SEND_FRIEND_INVITATION_FAIL, SIZE_RESPONSE_CODE);
 
 	}
@@ -403,11 +395,10 @@ void solveResDenyFriendInvitation(Account *account, Message &response) {
 
 /**Solve Get request**/
 void solveResAcceptChallengeInvitation(Account *account, Message &response) {
+	SOCKET sock = account->perHandleData->socket;
 	Message resp(RESPONSE_TO_CLIENT, reform(UNDENTIFIED, SIZE_RESPONSE_CODE));
 
-	Account *userAccepted = findAccount(response.content);
-
-	if (userAccepted == NULL) {
+	if (sock == NULL) {
 		resp.content = reform(S2C_SEND_CHALLENGE_INVITATION_FAIL, SIZE_RESPONSE_CODE);
 	}
 	else {
@@ -436,6 +427,43 @@ void solveResDenyChallengInvitation(Account *account, Message &response) {
 
 ///////////////////////////// In Gamme /////////////////////////////
 
+vector<Match*> matches;
+
+Match* getMatch(Account* account) {
+
+	for (auto i = matches.begin(); i < matches.end(); i++) {
+		if ((*i)->xSock == account->perHandleData->socket || (*i)->ySock == account->perHandleData->socket) {
+			return (*i);
+		}
+	}
+	return NULL;
+}
+
+void removeMatch(Match *match) {
+	for (auto i = matches.begin(); i != matches.end(); i++) 
+		if ((*i) == match) {
+			matches.erase(i);
+			return;
+		}
+}
+
+Account* getAccountFromMatchX(Match* match) {
+	for (auto account = accounts.begin(); account != accounts.end(); account++) {
+		if (match->xSock == (*account)->perHandleData->socket) {
+			return (*account);
+		}
+	}
+}
+
+Account* getAccountFromMatchO(Match* match) {
+	for (auto account = accounts.begin(); account != accounts.end(); account++) {
+		if (match->ySock == (*account)->perHandleData->socket) {
+			return (*account);
+		}
+	}
+}
+
+
 /**Solve Stop Match request**/
 void solveStopMatchReq(Account *account, Message &request) {
 	Message response(RESPONSE_TO_CLIENT, reform(UNDENTIFIED, SIZE_RESPONSE_CODE));
@@ -443,26 +471,117 @@ void solveStopMatchReq(Account *account, Message &request) {
 	// get database
 	// solve request
 	//
+	// xử lý khi client đột ngột muốn kết thúc
+	Match* match = getMatch(account);
+	if (account->perHandleData->socket == match->xSock) {
+		match->win = -1;
+		endGame(match);
+	}
+	else {
+		match->win = 1;
+		endGame(match);
+	}
 
-	
 
 }
 
 
+
 /**Solve Play request**/
+// nhận tọa độ cập nhật vào bàn cờ, xử lý thắng thua,  thông báo thắng thua, cập nhật elo
 void solvePlayReq(Account *account, Message &request) {
 	Message response(RESPONSE_TO_CLIENT, reform(UNDENTIFIED, SIZE_RESPONSE_CODE));
+	string content = request.content;
+	size_t found = content.find("$");
+	string xx = content.substr(0, found);
+	string yy = content.substr(found + 1);
+	int x = atoi(xx.c_str());
+	int y = atoi(yy.c_str());
+	//bắt đầu : {
+	//- tạo match
+	//- nhận thông điệp
+	//- 
+	// cập nhật database
+	//}
 
+	Match* match = getMatch(account);
+	if (match->xSock != NULL) {
+		if (account->perHandleData->socket == match->xSock) {
+			match->xPlay(x, y);
+			saveLog(account, request, C2S_PLAY);
+			if (match->xPlay(x, y) == true) {
+				match->win = 1;
+				endGame(match);
+			}
+		}
+		else
+		{
+			if (account->perHandleData->socket == match->ySock) {
+				match->oPlay(x, y);
+				saveLog(account, request, C2S_PLAY);
+				if (match->oPlay(x, y) == true) {
+					match->win = -1;
+					endGame(match);
+				}
+			}
+		}
+	}
+	
 }
 
 
 /** Send command StartGame to client**/
-void startGame(Match *match) {
- 
+// viết log
+void startGame(Account *player1, Account *player2) {
+	Match* match = new Match(player1->perHandleData->socket, player2->perHandleData->socket); // tạo match
+	matches.push_back(match); // gán match vào mảng
+
+	Message response_1(S2C_START_GAME, "X$" + account[0].username); 	// gửi request đến hai client
+	Message response_2(S2C_START_GAME, "O$" + account[1].username);
+
+	player1->matchStatus = IN_GAME;
+	player2->matchStatus = IN_GAME;
+
+	string log = "///////////////////////////////////////////////////////////////////n START_GAME: " + getCurrentDateTime();
+	save(log.c_str(), (char*) player1->username.c_str());
+	//log
+
+	player1->send(response_1);
+	player2->send(response_2);
 }
 
 /** Send command EndGame to client**/
+// xóa match khỏi hàng đợi, gửi file log đến 2 client, cập nhật database
 void endGame(Match *match) {
+	Account* player1 = getAccountFromMatchX(match);
+	Account* player2 = getAccountFromMatchO(match);
+
+	switch (match->win)
+	{
+	case 1: {
+		database->updateElo(player1->username, 3);
+		database->updateElo(player2->username, -3);
+		string log = "END_GAME: X_WIN" + getCurrentDateTime() + "/n///////////////////////////////////////////////////////////////////";
+		save(log.c_str(), (char*) player1->username.c_str());
+	 // chỉnh save log, gửi file
+		break;
+	}
+	case -1: {
+		database->updateElo(player1->username, -3);
+		database->updateElo(player2->username, 3);
+		// chỉnh savelog, gửi file
+		break;
+	}
+	default:
+	{
+		// chỉnh log, gửi file
+		break;
+	}
+	} 
+	
+	removeMatch(match); 
+	player1->matchStatus = NOT_IN_GAME;
+	player2->matchStatus = NOT_IN_GAME;
 
 }
 

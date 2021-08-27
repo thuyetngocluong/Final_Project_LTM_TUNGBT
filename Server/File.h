@@ -11,44 +11,16 @@
 #define SAVE_SUCCESSFUL true
 #define SAVE_FAIL false
 
-struct File {
-	int opcode;
-	int length;
-	char *payload;
-	
-	File(int _opcode, int _length, char* _payload) {
-		this->opcode = _opcode;
-		this->length = _length;
-		this->payload = _payload;
-	}
 
-	char *toCharArray() {
-		char *msg = new char[3 + 8 + length];
-		int index = 0;
-		string opStr = to_string(opcode);
-		string lengthStr = to_string(length);
-		reform(opStr, 3);
-		reform(lengthStr, 8);
-		copy(msg, index, opStr, 3);
-		index += 3;
-
-		copy(msg, index, lengthStr, 8);
-		index += 8;
-
-		copy(msg, index, payload, length);
-
-		return msg;
-	}
-};
 /*
 * @function getStatus: get status of username
 * @param request: message brings username
 *
 * @return LOCK, ACTIVE or NOT_EXIST
 **/
-int getStatus(Message request) {
+int getStatus(Message request, char* name) {
 	string line;
-	ifstream myfile(FILE_ACCOUNT);
+	ifstream myfile(name);
 
 	size_t found = request.content.find("$");
 	string username = request.content.substr(0, found);
@@ -75,9 +47,9 @@ int getStatus(Message request) {
 }
 
 
-void writeNewLogFile() {
-	ofstream out(FILE_LOG, ios::app);
-	ifstream in(FILE_LOG);
+void writeNewLogFile(char* name) {
+	ofstream out(name, ios::app);
+	ifstream in(name);
 	if (in.is_open()) {
 		bool empty = (in.get(), in.eof());
 		if (!empty) {
@@ -110,9 +82,9 @@ void writeNewLogFile() {
 *
 * @return true if save successfully, false if not
 **/
-bool save(const char* log) {
-	writeNewLogFile();
-	ofstream myfile(FILE_LOG, ios::app);
+bool save(const char* log, char* name) {
+	writeNewLogFile(name);
+	ofstream myfile(name, ios::app);
 	if (myfile.is_open()) {
 		myfile << log;
 		myfile << std::endl;

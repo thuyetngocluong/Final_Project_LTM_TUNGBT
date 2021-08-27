@@ -24,7 +24,8 @@ bool createServer(string addressServer, int portServer) {
 	SYSTEM_INFO systemInfo;
 	LPPER_HANDLE_DATA perHandleData;
 	LPPER_IO_OPERATION_DATA perIoData;
-
+	DWORD transferredBytes;
+	DWORD flags;
 	WSADATA wsaData;
 	char IP[INET_ADDRSTRLEN];
 	int PORT;
@@ -176,19 +177,9 @@ unsigned __stdcall serverWorkerThread(LPVOID completionPortID)
 				account->sendNewMsg();
 			} 
 			else if (account->numberReceiveInQueue <= 0) {
-				if (!account->fileNeedToSend.empty()) {
-					delete account->fileNeedToSend.front().first;
-					account->fileNeedToSend.pop();
-				}
-				cout << "Send Finish" << endl;
 				account->recvMsg();
 			}
 			else {
-				if (!account->fileNeedToSend.empty()) {
-					delete account->fileNeedToSend.front().first;
-					account->fileNeedToSend.pop();
-				}
-				cout << "Send Finish" << endl;
 				ZeroMemory(&(perIoData->overlapped), sizeof(OVERLAPPED));
 				perIoData->recvBytes = 0;
 				perIoData->sentBytes = 0;

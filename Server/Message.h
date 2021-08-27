@@ -15,6 +15,7 @@
 #define NOT_RECV_FULL false
 #define RECEIVE 0
 #define SEND 1
+#define BUFF_SIZE 2048
 
 
 struct Message {
@@ -57,7 +58,7 @@ void messageToRequest(string tmp, string &restMessage, std::queue<Message> &requ
 	restMessage += tmp;
 	tmp = restMessage;
 	size_t found = restMessage.find(DELIMITER);
-	
+
 	while (found != std::string::npos) {
 		restMessage = tmp.substr(found + SIZE_COMMAND);
 		string s = tmp.substr(0, found);

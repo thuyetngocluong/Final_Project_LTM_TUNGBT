@@ -13,6 +13,7 @@
 struct Match {
 	SOCKET xSock;
 	SOCKET ySock;
+	int win = 0;
 	char board[BOARD_WIDTH][BOARD_HEIGHT];
 
 	Match(SOCKET &_xSock, SOCKET &_ySock) {
