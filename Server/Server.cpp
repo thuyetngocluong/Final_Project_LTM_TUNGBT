@@ -127,8 +127,8 @@ void newClientConnect(LPPER_HANDLE_DATA perHandleData, LPPER_IO_OPERATION_DATA p
 	accounts.insert(account);
 	//account->recvMsg();
 
-	Sleep(2000);
-	sendFile("test1.rar", account);
+	//Sleep(2000);
+	//sendFile("test1.rar", account);
 }
 
 void clientDisconnect(Account *account) {
