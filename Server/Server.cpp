@@ -34,9 +34,6 @@ using namespace std;
 #define RECEIVE 0
 #define SEND 1
 
-int x = 10;
-int y = 20;
-string anh = "Ngao";
 
 // Structure definition
 typedef struct {
@@ -61,6 +58,8 @@ typedef struct {
 #include "Player.h"
 #include "Database.h"
 #include "File.h"
+
+#include "Account.h"
 #include "Match.h"
 
 
@@ -90,7 +89,7 @@ void				receiveMessage(Account*, char*, int);
 void				newClientConnect(LPPER_HANDLE_DATA, LPPER_IO_OPERATION_DATA, string, int);
 void				clientDisconnect(Account*);
 Account*			findAccount(LPPER_HANDLE_DATA);
-#include "Account.h"
+
 #include "CompletionPortServer.h"
 
 set<Account*> accounts;
@@ -102,12 +101,6 @@ HANDLE mutexSendingRequest;
 
 Data *database;
 
-<<<<<<< HEAD
-int x = 20;
-string thuyet = "Anh";
-=======
-int x = 10;
->>>>>>> thuyetln
 
 int _tmain(int argc, _TCHAR* argv[])
 {
@@ -128,12 +121,28 @@ int _tmain(int argc, _TCHAR* argv[])
 	return 0;
 }
 
+int numberClient = 0;
+Account *acc1, *acc2;
+
 void newClientConnect(LPPER_HANDLE_DATA perHandleData, LPPER_IO_OPERATION_DATA perIoData, string ip, int port) {
 	account = new Account(perHandleData, perIoData);
 	account->IP = ip;
 	account->PORT = port;
 	accounts.insert(account);
 	account->recvMsg();
+
+	numberClient++;
+	if (numberClient == 1) {
+		acc1 = account;
+		acc1->username = "thuyetln";
+	}
+	if (numberClient == 2) {
+		acc2 = account;
+		acc2->username = "anhnh";
+		startGame(acc1, acc2);
+	}
+		 
+
 }
 
 void clientDisconnect(Account *account) {
@@ -149,9 +158,10 @@ void receiveMessage(Account* account, char* msg, int length) {
 
 	messageToRequest(msg, account->restMessage, account->requests);
 
-	if (account->requests.empty() && account->numberReceiveInQueue <= 0) {
+	if (account->numberReceiveInQueue <= 0) {
 		account->recvMsg();
 	}
+
 
 	while (!account->requests.empty()) {
 		Message request = account->requests.front();
@@ -441,7 +451,7 @@ vector<Match*> matches;
 Match* getMatch(Account* account) {
 
 	for (auto i = matches.begin(); i < matches.end(); i++) {
-		if ((*i)->xSock == account->perHandleData->socket || (*i)->ySock == account->perHandleData->socket) {
+		if ((*i)->xAcc == account || (*i)->oAcc == account) {
 			return (*i);
 		}
 	}
@@ -452,24 +462,9 @@ void removeMatch(Match *match) {
 	for (auto i = matches.begin(); i != matches.end(); i++) 
 		if ((*i) == match) {
 			matches.erase(i);
+			delete match;
 			return;
 		}
-}
-
-Account* getAccountFromMatchX(Match* match) {
-	for (auto account = accounts.begin(); account != accounts.end(); account++) {
-		if (match->xSock == (*account)->perHandleData->socket) {
-			return (*account);
-		}
-	}
-}
-
-Account* getAccountFromMatchO(Match* match) {
-	for (auto account = accounts.begin(); account != accounts.end(); account++) {
-		if (match->ySock == (*account)->perHandleData->socket) {
-			return (*account);
-		}
-	}
 }
 
 
@@ -482,12 +477,12 @@ void solveStopMatchReq(Account *account, Message &request) {
 	//
 	// xử lý khi client đột ngột muốn kết thúc
 	Match* match = getMatch(account);
-	if (account->perHandleData->socket == match->xSock) {
-		match->win = -1;
+	if (account == match->xAcc) {
+		match->win = O_WIN;
 		endGame(match);
 	}
 	else {
-		match->win = 1;
+		match->win = X_WIN;
 		endGame(match);
 	}
 
@@ -506,34 +501,69 @@ void solvePlayReq(Account *account, Message &request) {
 	string yy = content.substr(found + 1);
 	int x = atoi(xx.c_str());
 	int y = atoi(yy.c_str());
-	//bắt đầu : {
-	//- tạo match
-	//- nhận thông điệp
-	//- 
-	// cập nhật database
-	//}
 
 	Match* match = getMatch(account);
-	if (match->xSock != NULL) {
-		if (account->perHandleData->socket == match->xSock) {
-			match->xPlay(x, y);
-			saveLog(account, request, C2S_PLAY);
-			if (match->xPlay(x, y) == true) {
-				match->win = 1;
-				endGame(match);
+
+
+	if (match != NULL) {
+		if (account == match->xAcc) {
+			if (!match->xCanPlay(x, y)) {
+				account->send(Message(RESPONSE_TO_CLIENT, reform(S2C_PLAY_FAIL, SIZE_RESPONSE_CODE)));
+			}
+			else {
+				save((char*)(match->nameLogFile.c_str()), getCurrentDateTime(), match->xAcc->username, xx, yy);
+
+				string rsp = reform(S2C_PLAY_SUCCESSFUL, SIZE_RESPONSE_CODE) + match->xAcc->username + "&" + xx + "$" + yy;
+				
+				switch (match->xPlay(x, y)) {
+				case WIN:
+					match->win = X_WIN;
+					endGame(match);
+					break;
+				case NOT_WIN:
+					match->xAcc->send(Message(RESPONSE_TO_CLIENT, rsp));
+					match->oAcc->send(Message(RESPONSE_TO_CLIENT, rsp));
+					break;
+				case GAME_DRAW:
+					match->win = GAME_DRAW;
+					endGame(match);
+					break;
+				default:
+					break;
+				}
 			}
 		}
 		else
 		{
-			if (account->perHandleData->socket == match->ySock) {
-				match->oPlay(x, y);
-				saveLog(account, request, C2S_PLAY);
-				if (match->oPlay(x, y) == true) {
-					match->win = -1;
+			if (!match->oCanPlay(x, y)) {
+				account->send(Message(RESPONSE_TO_CLIENT, reform(S2C_PLAY_FAIL, SIZE_RESPONSE_CODE)));
+			}
+			else {
+				save((char*)(match->nameLogFile.c_str()), getCurrentDateTime(), match->oAcc->username, xx, yy);
+
+				string rsp = reform(S2C_PLAY_SUCCESSFUL, SIZE_RESPONSE_CODE) + match->oAcc->username + "&" + xx + "$" + yy;
+				match->xAcc->send(Message(RESPONSE_TO_CLIENT, rsp));
+				match->oAcc->send(Message(RESPONSE_TO_CLIENT, rsp));
+
+				switch (match->oPlay(x, y)) {
+				case WIN:
+					match->win = O_WIN;
 					endGame(match);
+					break;
+				case NOT_WIN:
+					break;
+				case GAME_DRAW:
+					match->win = GAME_DRAW;
+					endGame(match);
+					break;
+				default:
+					break;
 				}
 			}
 		}
+	}
+	else {
+		account->send(Message(RESPONSE_TO_CLIENT, reform(S2C_PLAY_FAIL, SIZE_RESPONSE_CODE)));
 	}
 	
 }
@@ -541,56 +571,76 @@ void solvePlayReq(Account *account, Message &request) {
 
 /** Send command StartGame to client**/
 // viết log
-void startGame(Account *player1, Account *player2) {
-	Match* match = new Match(player1->perHandleData->socket, player2->perHandleData->socket); // tạo match
+void startGame(Account *playerX, Account *playerO) {
+	Match* match = new Match(playerX, playerO); // tạo match
 	matches.push_back(match); // gán match vào mảng
 
-	Message response_1(S2C_START_GAME, "X$" + account[0].username); 	// gửi request đến hai client
-	Message response_2(S2C_START_GAME, "O$" + account[1].username);
+	Message response_1(S2C_START_GAME, "X$" + playerX->username); 	// gửi request đến hai client
+	Message response_2(S2C_START_GAME, "O$" + playerO->username);
 
-	player1->matchStatus = IN_GAME;
-	player2->matchStatus = IN_GAME;
+	playerX->send(response_1);
+	playerO->send(response_2);
 
-	string log = "///////////////////////////////////////////////////////////////////n START_GAME: " + getCurrentDateTime();
-	save(log.c_str(), (char*) player1->username.c_str());
-	//log
+	playerX->matchStatus = IN_GAME;
+	playerO->matchStatus = IN_GAME;
 
-	player1->send(response_1);
-	player2->send(response_2);
+	string log = "********************** START GAME ***************************";
+	string log1 = "Time Start:\t\t\t" + getCurrentDateTime();
+	string log2 = "*************************************************************\n";
+
+	save(log.c_str(), (char*)(match->nameLogFile.c_str()));
+	save(log1.c_str(), (char*)(match->nameLogFile.c_str()));
+	save((char*)(match->nameLogFile.c_str()), "X Player: " + playerX->username, playerX->IP, to_string(playerX->PORT));
+	save((char*)(match->nameLogFile.c_str()), "O Player: " + playerO->username, playerO->IP, to_string(playerO->PORT));
+	save(log2.c_str(), (char*)(match->nameLogFile.c_str()));
+
+	
 }
 
 /** Send command EndGame to client**/
 // xóa match khỏi hàng đợi, gửi file log đến 2 client, cập nhật database
 void endGame(Match *match) {
-	Account* player1 = getAccountFromMatchX(match);
-	Account* player2 = getAccountFromMatchO(match);
 
 	switch (match->win)
 	{
-	case 1: {
-		database->updateElo(player1->username, 3);
-		database->updateElo(player2->username, -3);
-		string log = "END_GAME: X_WIN" + getCurrentDateTime() + "/n///////////////////////////////////////////////////////////////////";
-		save(log.c_str(), (char*) player1->username.c_str());
-	 // chỉnh save log, gửi file
+	case X_WIN: {
+		match->xAcc->send(Message(S2C_END_GAME, match->xAcc->username));
+		match->oAcc->send(Message(S2C_END_GAME, match->xAcc->username));
+		database->updateElo(match->xAcc->username, database->getElo(match->xAcc->username) + 3);
+		database->updateElo(match->oAcc->username, database->getElo(match->oAcc->username) - 3);
+		string log = "\n********************** END GAME: X WIN **********************";
+		save(log.c_str(), (char*)(match->nameLogFile.c_str()));
+		// chỉnh save log, gửi file
 		break;
 	}
-	case -1: {
-		database->updateElo(player1->username, -3);
-		database->updateElo(player2->username, 3);
+	case O_WIN: {
+		match->xAcc->send(Message(S2C_END_GAME, match->oAcc->username));
+		match->oAcc->send(Message(S2C_END_GAME, match->oAcc->username));
+		database->updateElo(match->xAcc->username, database->getElo(match->xAcc->username) - 3);
+		database->updateElo(match->oAcc->username, database->getElo(match->oAcc->username) + 3);
+		string log = "\n********************** END GAME: O WIN **********************";
+		save(log.c_str(), (char*)(match->nameLogFile.c_str()));
 		// chỉnh savelog, gửi file
 		break;
 	}
-	default:
-	{
-		// chỉnh log, gửi file
+	case GAME_DRAW: {
+		match->xAcc->send(Message(S2C_END_GAME, ""));
+		match->oAcc->send(Message(S2C_END_GAME, ""));
+		string log = "\n******************** END GAME: GAME DRAW ********************";
+		save(log.c_str(), (char*)(match->nameLogFile.c_str()));
 		break;
 	}
+	default:
+		// chỉnh log, gửi file
+		break;
+	
 	} 
 	
+	save(("Time End : \t\t\t" + getCurrentDateTime()).c_str(), (char*)(match->nameLogFile.c_str()));
+	save("*************************************************************", (char*)(match->nameLogFile.c_str()));
+	match->xAcc = NOT_IN_GAME;
+	match->oAcc = NOT_IN_GAME;
 	removeMatch(match); 
-	player1->matchStatus = NOT_IN_GAME;
-	player2->matchStatus = NOT_IN_GAME;
 
 }
 

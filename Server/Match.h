@@ -7,28 +7,53 @@
 #define WIN true
 #define NOT_WIN false
 
+
+#define X_WIN 1
+#define O_WIN 0
+#define GAME_DRAW -1
+
 #include "Account.h"
 
-
 struct Match {
-	SOCKET xSock;
-	SOCKET ySock;
+	Account *xAcc;
+	Account *oAcc;
 	int win = 0;
+	int numberXPlay = 0;
+	int numberOPlay = 0;
+	string nameLogFile;
+
 	char board[BOARD_WIDTH][BOARD_HEIGHT];
 
-	Match(SOCKET &_xSock, SOCKET &_ySock) {
+	Match(Account *_xAcc, Account *_oAcc) {
 		memset(board, NULL, sizeof(board));
-		this->xSock = _xSock;
-		this->ySock = _ySock;
+		this->xAcc = _xAcc;
+		this->oAcc = _oAcc;
+		nameLogFile = this->xAcc->username + "vs" + this->oAcc->username + "_" + getCurrentDateTime("%d_%m_%Y_%H_%M_%S") + ".txt";
 	}
 
-	bool xPlay(int _x, int _y) {
+	bool xCanPlay(int _x, int _y) {
+		return numberXPlay == numberOPlay && board[_x][_y] == NULL;
+	}
+
+	bool oCanPlay(int _x, int _y) {
+		return numberXPlay == numberOPlay + 1 && board[_x][_y] == NULL;
+	}
+	
+	int xPlay(int _x, int _y) {
+		numberXPlay++;
 		board[_x][_y] = 'x';
+		if (numberXPlay + numberOPlay == BOARD_WIDTH * BOARD_HEIGHT) {
+			return GAME_DRAW;
+		}
 		return winCheck('x', _x, _y);
 	}
 
-	bool oPlay(int _x, int _y) {
+	int oPlay(int _x, int _y) {
+		numberOPlay++;
 		board[_x][_y] = 'o';
+		if (numberXPlay + numberOPlay == BOARD_WIDTH * BOARD_HEIGHT) {
+			return GAME_DRAW;
+		}
 		return winCheck('o', _x, _y);
 	}
 

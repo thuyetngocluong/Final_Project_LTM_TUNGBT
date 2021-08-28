@@ -84,6 +84,27 @@ public:
 		return Player(id, username, elo);
 	}
 
+	long getElo(string ofUsername) {
+		long elo = 0;
+		SACommand query(&conn);
+		try {
+			string sql = "SELECT * FROM account WHERE username like '" + ofUsername + "'";
+			query.setCommandText(sql.c_str());
+			query.Execute();
+			query.FetchFirst();
+			elo = query["elo"].asLong();
+			query.Close();
+		}
+		catch (SAException &x)
+		{
+			// print error message
+			printf("%s\n", x.ErrText().GetMultiByteChars());
+			query.Close();
+		}
+		return elo;
+	}
+
+
 	void updateElo(string ofUsername, long elo) {
 		SACommand update(&conn);
 		try {
@@ -100,6 +121,7 @@ public:
 			update.Close();
 		}
 	}
+
 
 	vector<Player> getListFriend(Player player) {
 

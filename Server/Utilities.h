@@ -29,7 +29,7 @@ void reform(string &a, int numberOfChars) {
 *
 * @return string brings information of current date and time
 **/
-string getCurrentDateTime() {
+string getCurrentDateTime(string form ="[%d/%m/%Y %H:%M:%S]") {
 	char MY_TIME[22];
 	struct tm newtime;
 	__time64_t long_time;
@@ -42,7 +42,7 @@ string getCurrentDateTime() {
 	if (err) {
 		return "[00/00/00 00:00:00]";
 	}
-	strftime(MY_TIME, sizeof(MY_TIME), "[%d/%m/%Y %H:%M:%S]", &newtime);
+	strftime(MY_TIME, sizeof(MY_TIME), form.c_str(), &newtime);
 	string result = MY_TIME;
 
 	return result;

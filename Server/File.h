@@ -83,10 +83,48 @@ void writeNewLogFile(char* name) {
 * @return true if save successfully, false if not
 **/
 bool save(const char* log, char* name) {
-	writeNewLogFile(name);
 	ofstream myfile(name, ios::app);
 	if (myfile.is_open()) {
 		myfile << log;
+		myfile << std::endl;
+		myfile.close();
+		return true;
+	}
+
+	return false;
+}
+
+bool save(string fileName, string dateTime, string username, string xx, string yy) {
+	ofstream myfile(fileName.c_str(), ios::app);
+	if (myfile.is_open()) {
+		myfile << dateTime << "\t";
+		myfile << username;
+		
+		if (username.length() / 8 == 0) myfile << "\t\t\t";
+		if (username.length() / 8 == 1) myfile << "\t\t";
+		if (username.length() / 8 == 2) myfile << "\t";
+		
+		myfile << "play\t";
+		myfile << xx << " " << yy;
+		myfile << std::endl;
+		myfile.close();
+		return true;
+	}
+
+	return false;
+}
+
+bool save(string fileName, string username, string ip, string port) {
+	ofstream myfile(fileName.c_str(), ios::app);
+	if (myfile.is_open()) {
+		myfile << username;
+
+		if (username.length() / 8 == 0) myfile << "\t\t\t";
+		if (username.length() / 8 == 1) myfile << "\t\t";
+		if (username.length() / 8 == 2) myfile << "\t";
+
+		myfile << "IP:\t";
+		myfile << ip << ":" << port;
 		myfile << std::endl;
 		myfile.close();
 		return true;
