@@ -147,6 +147,7 @@ void newClientConnect(LPPER_HANDLE_DATA perHandleData, LPPER_IO_OPERATION_DATA p
 
 void clientDisconnect(Account *account) {
 	CloseHandle(account->mutex);
+	cout << getCurrentDateTime() << " Client [" << account->IP << ":" << account->PORT << "]: Disconnected" << endl;
 	accounts.erase(account);
 	while (!account->requests.empty()) account->requests.pop();
 	while (!account->messagesNeesToSend.empty()) account->messagesNeesToSend.pop();
@@ -166,7 +167,7 @@ void receiveMessage(Account* account, char* msg, int length) {
 	while (!account->requests.empty()) {
 		Message request = account->requests.front();
 		account->requests.pop();
-		cout << "Recv: " << request.toMessageSend() << endl;
+		cout << getCurrentDateTime() << " Client [" << account->IP << ":" << account->PORT << "]: Receive\t" << request.toMessageSend() << endl;
 		if (request.command == RESPONSE_TO_SERVER) {
 			solveResponseFromClient(account, request);
 		}
@@ -198,19 +199,6 @@ Account* findAccount(LPPER_HANDLE_DATA perHandleData) {
 	return NULL;
 }
 
-/**
-* @function deleteAccount: delete account and socket
-* @param socket: socket need to delete
-*
-(**/
-void deleteAccount(Account *account) {
-	CloseHandle(account->mutex);
-	accounts.erase(account);
-	while (!account->requests.empty()) account->requests.pop();
-	while (!account->messagesNeesToSend.empty()) account->messagesNeesToSend.pop();
-	closesocket(account->perHandleData->socket);
-	delete account;
-}
 
 /*
 * @function login: solve login command of the account with the request
@@ -227,8 +215,9 @@ void solveLoginReq(Account *account, Message &request) {
 	string password = content.substr(found + 1);
 
 	//if the account already logged 
-	if (database->login(username, password)) {
+	if (database->login(username, password) && account->signInStatus != LOGGED) {
 		account->username = username;
+		account->signInStatus = LOGGED;
 		response.content = reform(S2C_LOGIN_SUCCESSFUL, SIZE_RESPONSE_CODE);
 		vector<Player> listFr = database->getListFriend(database->getPlayerByName(account->username));
 		int i = 0;
@@ -239,14 +228,14 @@ void solveLoginReq(Account *account, Message &request) {
 			if (i != listFr.size()) listFrReform += "$";
 		}
 
-		Message ms1(RESPONSE_TO_CLIENT, listFrReform);
+		Message msgListFr(RESPONSE_TO_CLIENT, listFrReform);
 
 		account->send(response); // send response
-		account->send(ms1); // send list friend
+		account->send(msgListFr); // send list friend
 	}
 	else {
-		account->send(response);
 		response.content = reform(S2C_LOGIN_FAIL, SIZE_RESPONSE_CODE);
+		account->send(response);
 	}
 
 }
@@ -290,13 +279,14 @@ void solveReqRegisterAccount(Account *account, Message &request) {
 	else {
 		response.content = reform(S2C_REGISTER_FAIL, SIZE_RESPONSE_CODE);
 	}
-
+	
+	account->send(response);
 }
+
 
 
 /**Solve Get List request**/
 void solveGetListFriendReq(Account *account, Message &request) {
-	Message response(RESPONSE_TO_CLIENT, reform(UNDENTIFIED, SIZE_RESPONSE_CODE));
 
 	vector<Player> listFr = database->getListFriend(database->getPlayerByName(account->username));
 	string listFrReform = "";
@@ -308,9 +298,9 @@ void solveGetListFriendReq(Account *account, Message &request) {
 		if (i != listFr.size()) listFrReform += "$";
 	}
 
-	response.content = reform(S2C_GET_LIST_FRIEND_SUCCESSFUL, SIZE_RESPONSE_CODE) + listFrReform;
+	string content = reform(S2C_GET_LIST_FRIEND_SUCCESSFUL, SIZE_RESPONSE_CODE) + listFrReform;
 
-	account->send(response);
+	account->send(Message(RESPONSE_TO_CLIENT, content));
 
 }
 
@@ -351,8 +341,8 @@ void solveSendChallengeInvitationReq(Account *account, Message &request) {
 	else {
 		Message requestToFr(S2C_SEND_CHALLENGE_INVITATION, account->username);
 
-
 		response.content = reform(S2C_SEND_CHALLENGE_INVITATION_SUCCESSFUL, SIZE_RESPONSE_CODE);
+
 		account->send(response);
 		account->send(requestToFr);
 	}

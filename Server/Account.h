@@ -97,7 +97,8 @@ struct Account {
 		string responseStr = response.toMessageSend();
 		DWORD transferredBytes = 0;
 
-		cout << "Sending: " << responseStr << endl;
+		cout << getCurrentDateTime() << " Client [" << IP << ":" << PORT << "]: Send\t" << responseStr << endl;
+
 		ZeroMemory(&(perIoData->overlapped), sizeof(OVERLAPPED));
 		perIoData->recvBytes = responseStr.length();
 		perIoData->sentBytes = 0;
