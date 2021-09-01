@@ -20,7 +20,7 @@
 
 struct Message {
 	int command;
-	string content;//# content of Message
+	string content = "";//# content of Message
 	//constructor
 	Message(int _command, string _content) {
 		this->command = _command;

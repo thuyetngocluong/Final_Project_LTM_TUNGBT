@@ -131,17 +131,17 @@ void newClientConnect(LPPER_HANDLE_DATA perHandleData, LPPER_IO_OPERATION_DATA p
 	accounts.insert(account);
 	account->recvMsg();
 
-	numberClient++;
-	if (numberClient == 1) {
-		acc1 = account;
-		acc1->username = "thuyetln";
-	}
-	if (numberClient == 2) {
-		acc2 = account;
-		acc2->username = "anhnh";
-		startGame(acc1, acc2);
-	}
-		 
+	//numberClient++;
+	//if (numberClient == 1) {
+	//	acc1 = account;
+	//	acc1->username = "thuyetln";
+	//}
+	//if (numberClient == 2) {
+	//	acc2 = account;
+	//	acc2->username = "anhnh";
+	//	startGame(acc1, acc2);
+	//}
+	//	 
 
 }
 
@@ -168,6 +168,8 @@ void receiveMessage(Account* account, char* msg, int length) {
 		Message request = account->requests.front();
 		account->requests.pop();
 		cout << getCurrentDateTime() << " Client [" << account->IP << ":" << account->PORT << "]: Receive\t" << request.toMessageSend() << endl;
+		
+		
 		if (request.command == RESPONSE_TO_SERVER) {
 			solveResponseFromClient(account, request);
 		}
@@ -228,7 +230,7 @@ void solveLoginReq(Account *account, Message &request) {
 			if (i != listFr.size()) listFrReform += "$";
 		}
 
-		Message msgListFr(RESPONSE_TO_CLIENT, listFrReform);
+		Message msgListFr(RESPONSE_TO_CLIENT, reform(RES_GET_LIST_FRIEND_SUCCESSFUL, SIZE_RESPONSE_CODE) + listFrReform);
 
 		account->send(response); // send response
 		account->send(msgListFr); // send list friend
@@ -307,44 +309,31 @@ void solveGetListFriendReq(Account *account, Message &request) {
 
 /**Solve Add Friend request**/
 void solveSendFriendInvitationReq(Account *account, Message &request) {
-	Message response(RESPONSE_TO_CLIENT, reform(RES_UNDENTIFIED, SIZE_RESPONSE_CODE));
-
-	SOCKET sock = account->perHandleData->socket;
-
-	if (sock == NULL) {
-		response.content = reform(RES_SEND_FRIEND_INVITATION_FAIL, SIZE_RESPONSE_CODE);
-		account->send(response);
+	Account *toAcc = findAccount(request.content);
+	
+	if (toAcc == NULL) {
+		account->send(Message(RESPONSE_TO_CLIENT, reform(RES_SEND_FRIEND_INVITATION_FAIL, SIZE_RESPONSE_CODE)));
 	}
 	else {
-		Message requestToFr(REQ_SEND_FRIEND_INVITATION, account->username);
+		account->send(Message(RESPONSE_TO_CLIENT, reform(RES_SEND_FRIEND_INVITATION_SUCCESSFUL, SIZE_RESPONSE_CODE)));
 
-		response.content = reform(RES_SEND_FRIEND_INVITATION_SUCCESSFUL, SIZE_RESPONSE_CODE);
-
-		account->send(response);
-		account->send(requestToFr);
+		toAcc->send(Message(REQ_SEND_FRIEND_INVITATION, account->username));
 	}
-
-
 }
 
 
 /**Solve Challenge request**/
 void solveSendChallengeInvitationReq(Account *account, Message &request) {
-	Message response(RESPONSE_TO_CLIENT, reform(RES_UNDENTIFIED, SIZE_RESPONSE_CODE));
+	Account *toAcc = findAccount(request.content);
 
-	SOCKET sock = account->perHandleData->socket;
-
-	if (sock == NULL) {
-		response.content = reform(RES_SEND_CHALLENGE_INVITATION_FAIL, SIZE_RESPONSE_CODE);
-		account->send(response);
+	if (toAcc == NULL) {
+		account->send(Message(RESPONSE_TO_CLIENT, reform(RES_SEND_CHALLENGE_INVITATION_FAIL, SIZE_RESPONSE_CODE)));
 	}
 	else {
-		Message requestToFr(REQ_SEND_CHALLENGE_INVITATION, account->username);
-
-		response.content = reform(RES_SEND_CHALLENGE_INVITATION_SUCCESSFUL, SIZE_RESPONSE_CODE);
-
-		account->send(response);
-		account->send(requestToFr);
+		account->send(Message(RESPONSE_TO_CLIENT, reform(RES_SEND_CHALLENGE_INVITATION_SUCCESSFUL, SIZE_RESPONSE_CODE)));
+		
+		toAcc->send(Message(REQ_SEND_CHALLENGE_INVITATION, account->username));
+		
 	}
 
 
@@ -370,66 +359,61 @@ void solveChatReq(Account *account, Message &request) {
 
 /**Solve Get request**/
 void solveResAcceptFriendInvitation(Account *account, Message &response) {
-	Message resp(RESPONSE_TO_CLIENT, reform(RES_UNDENTIFIED, SIZE_RESPONSE_CODE));
-	SOCKET sock = account->perHandleData->socket;
-
-	if (sock == NULL) {
-		resp.content = reform(RES_SEND_FRIEND_INVITATION_FAIL, SIZE_RESPONSE_CODE);
-
+	string username = response.content.substr(SIZE_RESPONSE_CODE);
+	Account *toAcc = findAccount(username);
+	// save db
+	// TO_DO
+	
+	if (toAcc != NULL) {
+		Message requestToFr(RESPONSE_TO_CLIENT, reform(RES_ACCEPT_FRIEND_INVITATION, SIZE_RESPONSE_CODE) + account->username);
+		toAcc->send(requestToFr);
 	}
-	else {
-		Message requestToFr(RES_ACCEPT_FRIEND_INVITATION, account->username);
 
-		resp.content = reform(RES_SEND_FRIEND_INVITATION_SUCCESSFUL, SIZE_RESPONSE_CODE);
-	}
+	
 
 }
 
 /**Solve Get request**/
 void solveResDenyFriendInvitation(Account *account, Message &response) {
-	SOCKET sock = account->perHandleData->socket;
-	Message resp(RESPONSE_TO_CLIENT, reform(RES_UNDENTIFIED, SIZE_RESPONSE_CODE));
-
-	if (sock == NULL) {
-		resp.content = reform(RES_SEND_FRIEND_INVITATION_FAIL, SIZE_RESPONSE_CODE);
+	string username = response.content.substr(SIZE_RESPONSE_CODE);
+	Account *toAcc = findAccount(username);
+	if (toAcc != NULL) {
+		Message requestToFr(RESPONSE_TO_CLIENT, reform(RES_DENY_FRIEND_INVITATION, SIZE_RESPONSE_CODE) + account->username);
+		toAcc->send(requestToFr);
 	}
-	else {
-		Message requestToFr(RES_DENY_FRIEND_INVITATION, account->username);
-
-		resp.content = reform(RES_SEND_FRIEND_INVITATION_SUCCESSFUL, SIZE_RESPONSE_CODE);
-	}
-
 
 }
 
 /**Solve Get request**/
 void solveResAcceptChallengeInvitation(Account *account, Message &response) {
-	SOCKET sock = account->perHandleData->socket;
-	Message resp(RESPONSE_TO_CLIENT, reform(RES_UNDENTIFIED, SIZE_RESPONSE_CODE));
+	string username = response.content.substr(SIZE_RESPONSE_CODE);
+	Account *toAcc = findAccount(username);
 
-	if (sock == NULL) {
-		resp.content = reform(RES_SEND_CHALLENGE_INVITATION_FAIL, SIZE_RESPONSE_CODE);
+	if (toAcc != NULL && toAcc->matchStatus == NOT_IN_GAME) {
+		toAcc->send(Message(RESPONSE_TO_CLIENT, reform(RES_ACCEPT_CHALLENGE_INVITATION, SIZE_RESPONSE_CODE) + account->username));
+		account->send(Message(RESPONSE_TO_CLIENT, reform(RES_ACCEPT_CHALLENGE_INVITATION, SIZE_RESPONSE_CODE) + toAcc->username));
+		int isX = rand() % 2;
+		if (isX == 0) {
+			startGame(toAcc, account);
+		}
+		else {
+			startGame(account, toAcc);
+		}
 	}
 	else {
-		Message requestToFr(RES_ACCEPT_CHALLENGE_INVITATION, account->username);
-
-		resp.content = reform(RES_SEND_CHALLENGE_INVITATION_SUCCESSFUL, SIZE_RESPONSE_CODE);
+		account->send(Message(RESPONSE_TO_CLIENT, reform(RES_DENY_CHALLENGE_INVITATION, SIZE_RESPONSE_CODE) + toAcc->username));
 	}
-
 }
 
 /**Solve Get request**/
 void solveResDenyChallengInvitation(Account *account, Message &response) {
-	SOCKET sock = account->perHandleData->socket;
-	Message resp(RESPONSE_TO_CLIENT, reform(RES_UNDENTIFIED, SIZE_RESPONSE_CODE));
+	string username = response.content.substr(SIZE_RESPONSE_CODE);
+	Account *toAcc = findAccount(username);
 
-	if (sock == NULL) {
-		resp.content = reform(RES_SEND_CHALLENGE_INVITATION_FAIL, SIZE_RESPONSE_CODE);
+	if (toAcc != NULL) {
+		toAcc->send(Message(RESPONSE_TO_CLIENT, reform(RES_DENY_CHALLENGE_INVITATION, SIZE_RESPONSE_CODE) + account->username));	
 	}
-	else {
-		Message requestToFr(RES_DENY_CHALLENGE_INVITATION, account->username);
-		resp.content = reform(RES_SEND_CHALLENGE_INVITATION_SUCCESSFUL, SIZE_RESPONSE_CODE);
-	}
+
 }
 
 
@@ -460,13 +444,19 @@ void removeMatch(Match *match) {
 
 /**Solve Stop Match request**/
 void solveStopMatchReq(Account *account, Message &request) {
-	Message response(RESPONSE_TO_CLIENT, reform(RES_UNDENTIFIED, SIZE_RESPONSE_CODE));
 	//
 	// get database
 	// solve request
 	//
 	// xử lý khi client đột ngột muốn kết thúc
 	Match* match = getMatch(account);
+	if (match == NULL) {
+		// TO-DO
+		return;
+	}
+
+	save((getCurrentDateTime() + "\t" + account->username + "\tSURRENDER").c_str() , (char*)(match->nameLogFile.c_str()));
+
 	if (account == match->xAcc) {
 		match->win = O_WIN;
 		endGame(match);
@@ -649,6 +639,7 @@ void sloveResRecivedRequestStartGame(Account *account, Message &request) {
 * @return: the Message struct brings result code
 **/
 void solveRequest(Account *account, Message &request) {
+
 	switch (request.command) {
 	case REQ_LOGIN:
 		solveLoginReq(account, request);
@@ -685,7 +676,7 @@ void solveRequest(Account *account, Message &request) {
 
 void solveResponseFromClient(Account *account, Message &response) {
 	int statusCode = atoi(response.content.substr(0, SIZE_RESPONSE_CODE).c_str());
-
+	
 	if (statusCode == 0) {
 		Message resp(RESPONSE_TO_CLIENT, reform(RES_UNDENTIFIED, SIZE_RESPONSE_CODE));
 		account->send(resp);
