@@ -18,6 +18,7 @@ struct Account {
 	string IP;//# ip of account
 	int PORT;//#port of account
 	string username = "";//#username which the account logged in
+
 	int signInStatus = NOT_LOGGED;//# login status of the account
 	int matchStatus = NOT_IN_GAME;
 
@@ -27,108 +28,134 @@ struct Account {
 
 	HANDLE mutex;
 
-	Account(LPPER_HANDLE_DATA _perHandleData, LPPER_IO_OPERATION_DATA _perIoData) {
-		this->perHandleData = _perHandleData;
-		this->perIoData = _perIoData;
-		mutex = CreateMutex(0, 0, 0);
-	}
+	Account(LPPER_HANDLE_DATA _perHandleData, LPPER_IO_OPERATION_DATA _perIoData);
 
-	void lock() {
-		WaitForSingleObject(this->mutex, INFINITE);
-	}
+	void lock(DWORD milisec);
 
-	void unlock() {
-		ReleaseMutex(this->mutex);
-	}
+	void unlock();
 
-	bool canSendNewMsg() {
-		return ((perIoData->recvBytes <= perIoData->sentBytes) || (perIoData->operation == RECEIVE)) && !messagesNeesToSend.empty();
-	}
+	bool canSendNewMsg();
 
-	bool canContinuteSendMsg() {
-		return perIoData->recvBytes > perIoData->sentBytes && perIoData->operation == SEND && !waiting;
-	}
+	bool canContinuteSendMsg();
 
-	void recvMsg() {
-		numberReceiveInQueue++;
-		DWORD transferredBytes = 0;
-		DWORD flags = 0;
-		ZeroMemory(&(perIoData->overlapped), sizeof(OVERLAPPED));
-		perIoData->recvBytes = 0;
-		perIoData->sentBytes = 0;
-		perIoData->dataBuff.len = DATA_BUFSIZE;
-		perIoData->dataBuff.buf = perIoData->buffer;
-		perIoData->operation = RECEIVE;
-		if (WSARecv(perHandleData->socket,
-			&(perIoData->dataBuff),
-			1,
-			&transferredBytes,
-			&flags,
-			&(perIoData->overlapped), NULL) == SOCKET_ERROR) {
-			if (WSAGetLastError() != ERROR_IO_PENDING) {
-				printf("WSARecv() failed with error %d\n", WSAGetLastError());
-			}
-		}
-	}
+	void recvMsg();
 
-	void continuteSendMsg() {
-		DWORD flags = 0;
-		DWORD transferredBytes = 0;
-		ZeroMemory(&(perIoData->overlapped), sizeof(OVERLAPPED));
-		perIoData->dataBuff.buf = perIoData->buffer + perIoData->sentBytes;
-		perIoData->dataBuff.len = perIoData->recvBytes - perIoData->sentBytes;
-		perIoData->operation = SEND;
-		if (WSASend(perHandleData->socket,
-			&(perIoData->dataBuff),
-			1,
-			&transferredBytes,
-			0,
-			&(perIoData->overlapped),
-			NULL) == SOCKET_ERROR) {
-			if (WSAGetLastError() != ERROR_IO_PENDING) {
-				printf("WSASend() continute message failed with error %d\n", WSAGetLastError());
-			}
-		}
-	}
+	void continuteSendMsg();
 
-	void sendNewMsg() {		
-		Message response = messagesNeesToSend.front();
-		messagesNeesToSend.pop();
-		string responseStr = response.toMessageSend();
-		DWORD transferredBytes = 0;
+	void sendNewMsg();
 
-		cout << getCurrentDateTime() << " Client [" << IP << ":" << PORT << "]: Send\t" << responseStr << endl;
+	void send(Message msgNeedToSend);
 
-		ZeroMemory(&(perIoData->overlapped), sizeof(OVERLAPPED));
-		perIoData->recvBytes = responseStr.length();
-		perIoData->sentBytes = 0;
-		strcpy_s(perIoData->buffer, responseStr.c_str());
-		perIoData->dataBuff.len = responseStr.length();
-		perIoData->dataBuff.buf = perIoData->buffer;
-		perIoData->operation = SEND;
-		if (WSASend(perHandleData->socket,
-			&(perIoData->dataBuff),
-			1,
-			&transferredBytes,
-			0,
-			&(perIoData->overlapped),
-			NULL) == SOCKET_ERROR) {
-			if (WSAGetLastError() != ERROR_IO_PENDING) {
-				printf("WSASend() new message failed with error %d\n", WSAGetLastError());
-			}
-		}
-	}
-
-	void send(Message msgNeedToSend) {
-		lock();
-		messagesNeesToSend.push(msgNeedToSend);
-		if (canSendNewMsg()) {
-			sendNewMsg();
-		}
-		unlock();
-	}
+	void sendFile(string nameFile);
 };
 
+Account::Account(LPPER_HANDLE_DATA _perHandleData, LPPER_IO_OPERATION_DATA _perIoData) {
+	this->perHandleData = _perHandleData;
+	this->perIoData = _perIoData;
+	mutex = CreateMutex(0, 0, 0);
+}
+
+void Account::lock(DWORD milisec = INFINITE) {
+	WaitForSingleObject(this->mutex, milisec);
+}
+
+void Account::unlock() {
+	ReleaseMutex(this->mutex);
+}
+
+bool Account::canSendNewMsg() {
+	return ((perIoData->recvBytes <= perIoData->sentBytes) || (perIoData->operation == RECEIVE)) && !messagesNeesToSend.empty();
+}
+
+bool Account::canContinuteSendMsg() {
+	return perIoData->recvBytes > perIoData->sentBytes && perIoData->operation == SEND && !waiting;
+}
+
+
+void Account::recvMsg() {
+	numberReceiveInQueue++;
+	DWORD transferredBytes = 0;
+	DWORD flags = 0;
+	ZeroMemory(&(perIoData->overlapped), sizeof(OVERLAPPED));
+	perIoData->recvBytes = 0;
+	perIoData->sentBytes = 0;
+	perIoData->dataBuff.len = DATA_BUFSIZE;
+	perIoData->dataBuff.buf = perIoData->buffer;
+	perIoData->operation = RECEIVE;
+	if (WSARecv(perHandleData->socket,
+		&(perIoData->dataBuff),
+		1,
+		&transferredBytes,
+		&flags,
+		&(perIoData->overlapped), NULL) == SOCKET_ERROR) {
+		if (WSAGetLastError() != ERROR_IO_PENDING) {
+			printf("WSARecv() failed with error %d\n", WSAGetLastError());
+		}
+	}
+}
+
+void Account::continuteSendMsg() {
+	DWORD flags = 0;
+	DWORD transferredBytes = 0;
+	ZeroMemory(&(perIoData->overlapped), sizeof(OVERLAPPED));
+	perIoData->dataBuff.buf = perIoData->buffer + perIoData->sentBytes;
+	perIoData->dataBuff.len = perIoData->recvBytes - perIoData->sentBytes;
+	perIoData->operation = SEND;
+	if (WSASend(perHandleData->socket,
+		&(perIoData->dataBuff),
+		1,
+		&transferredBytes,
+		0,
+		&(perIoData->overlapped),
+		NULL) == SOCKET_ERROR) {
+		if (WSAGetLastError() != ERROR_IO_PENDING) {
+			printf("WSASend() continute message failed with error %d\n", WSAGetLastError());
+		}
+	}
+}
+
+void Account::sendNewMsg() {
+	Message response = messagesNeesToSend.front();
+	messagesNeesToSend.pop();
+	string responseStr = response.toMessageSend();
+	DWORD transferredBytes = 0;
+
+	cout << getCurrentDateTime() << " Client [" << IP << ":" << PORT << "]: Send\t" << responseStr << endl;
+
+	ZeroMemory(&(perIoData->overlapped), sizeof(OVERLAPPED));
+	perIoData->recvBytes = responseStr.length();
+	perIoData->sentBytes = 0;
+	strcpy_s(perIoData->buffer, responseStr.c_str());
+	perIoData->dataBuff.len = responseStr.length();
+	perIoData->dataBuff.buf = perIoData->buffer;
+	perIoData->operation = SEND;
+	if (WSASend(perHandleData->socket,
+		&(perIoData->dataBuff),
+		1,
+		&transferredBytes,
+		0,
+		&(perIoData->overlapped),
+		NULL) == SOCKET_ERROR) {
+		if (WSAGetLastError() != ERROR_IO_PENDING) {
+			printf("WSASend() new message failed with error %d\n", WSAGetLastError());
+		}
+	}
+}
+
+
+void Account::send(Message msgNeedToSend) {
+	lock();
+	messagesNeesToSend.push(msgNeedToSend);
+	if (canSendNewMsg()) {
+		sendNewMsg();
+	}
+	unlock();
+}
+
+
+void Account::sendFile(string nameFile) {
+
+}
 
 /*
 * @function getInforAccount: get information of a account

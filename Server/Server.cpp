@@ -323,7 +323,7 @@ void solveSendFriendInvitationReq(Account *account, Message &request) {
 /**Solve Challenge request**/
 void solveSendChallengeInvitationReq(Account *account, Message &request) {
 	Account *toAcc = findAccount(request.content);
-
+	
 	if (toAcc == NULL) {
 		account->send(Message(RESPONSE, reform(RES_SEND_CHALLENGE_INVITATION_FAIL, SIZE_RESPONSE_CODE)));
 	}

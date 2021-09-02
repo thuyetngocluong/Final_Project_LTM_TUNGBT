@@ -45,3 +45,8 @@
 
 #define	RES_PLAY_SUCCESSFUL				520
 #define	RES_PLAY_FAIL					521
+
+
+#define TRANSFILE_ERROR		80
+#define TRANSFILE_ACK		81
+#define TRANSFILE_DATA		82
