@@ -95,7 +95,7 @@ struct Match {
 				if (count >= STREAK_TO_WIN) return true;
 			}
 			else break;
-			up++;
+			up--;
 		}
 
 		while (down < BOARD_HEIGHT) {
@@ -104,7 +104,7 @@ struct Match {
 				if (count >= STREAK_TO_WIN) return true;
 			}
 			else break;
-			down--;
+			down++;
 		}
 
 		return false;
