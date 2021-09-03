@@ -34,6 +34,8 @@ public:
 
 	vector<Player> getListFriend(Player player);
 
+	bool addFriendRelation(string username1, string username2);
+
 	bool login(string username, string password);
 
 	bool checkValidChallenge(string fromPlayer, string toPlayer);
@@ -191,6 +193,32 @@ vector<Player> Data::getListFriend(Player player) {
 		query.Close();
 	}
 	return rs;
+}
+
+
+bool Data::addFriendRelation(string username1, string username2) {
+	Player player1 = getPlayerByName(username1);
+	Player player2 = getPlayerByName(username2);
+
+	bool successful = false;
+	SACommand insert(&conn);
+
+	try {
+		string sql = "INSERT INTO friend (``id_person1`,`, ``id_person2`)`) VALUES ( '" + to_string(player1.getID()) + "', '" + to_string(player2.getID()) + "')";
+		insert.setCommandText(sql.c_str());
+
+		insert.Execute();
+		successful = true;
+		conn.Commit();
+		insert.Close();
+	}
+	catch (SAException &x)
+	{
+		// print error message
+		printf("%s\n", x.ErrText().GetMultiByteChars());
+		insert.Close();
+	}
+	return successful;
 }
 
 

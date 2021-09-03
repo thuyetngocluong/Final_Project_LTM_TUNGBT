@@ -138,19 +138,6 @@ void newClientConnect(LPPER_HANDLE_DATA perHandleData, LPPER_IO_OPERATION_DATA p
 	account->PORT = port;
 	accounts.insert(account);
 	account->recvMsg();
-
-	//numberClient++;
-	//if (numberClient == 1) {
-	//	acc1 = account;
-	//	acc1->username = "thuyetln";
-	//}
-	//if (numberClient == 2) {
-	//	acc2 = account;
-	//	acc2->username = "anhnh";
-	//	startGame(acc1, acc2);
-	//}
-	//	 
-
 }
 
 void clientDisconnect(Account *account) {
@@ -382,11 +369,8 @@ void getLog(Account *account, Message &request) {
 /**Solve Chat request**/
 void solveChatReq(Account *account, Message &request) {
 	Message response(RESPONSE, reform(RES_UNDENTIFIED, SIZE_RESPONSE_CODE));
-
-
 	
 }
-
 
 /**Solve Get request**/
 void solveResAcceptFriendInvitation(Account *account, Message &response) {
@@ -402,6 +386,7 @@ void solveResAcceptFriendInvitation(Account *account, Message &response) {
 	// TO_DO
 	
 	if (toAcc != NULL) {
+		database->addFriendRelation(account->username, toAcc->username);
 		Message requestToFr(RESPONSE, reform(RES_ACCEPT_FRIEND_INVITATION, SIZE_RESPONSE_CODE) + account->username);
 		toAcc->send(requestToFr);
 	}
