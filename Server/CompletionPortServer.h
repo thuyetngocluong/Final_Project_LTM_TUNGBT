@@ -133,6 +133,11 @@ unsigned __stdcall serverWorkerThread(LPVOID completionPortID)
 		if (GetQueuedCompletionStatus(completionPort, &transferredBytes,
 			(LPDWORD)&perHandleData, (LPOVERLAPPED *)&perIoData, INFINITE) == 0) {
 			printf("GetQueuedCompletionStatus() failed with error %d\n", GetLastError());
+			account = getAccountHasEvent(perHandleData);
+			if (account == NULL) continue;
+			if (onClientDisconnect != NULL) {
+				onClientDisconnect(account);
+			}
 			continue;
 		}
 

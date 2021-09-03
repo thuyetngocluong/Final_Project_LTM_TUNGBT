@@ -30,6 +30,8 @@ public:
 
 	void updateElo(string ofUsername, long elo);
 
+	void updateStatus(string ofUsername, int status);
+
 	vector<Player> getListFriend(Player player);
 
 	bool login(string username, string password);
@@ -144,6 +146,24 @@ void Data::updateElo(string ofUsername, long elo) {
 }
 
 
+void Data::updateStatus(string ofUsername, int status) {
+	SACommand update(&conn);
+	try {
+		string sql = "UPDATE account SET status = " + to_string(status) + " WHERE username like '" + ofUsername + "'";
+		update.setCommandText(sql.c_str());
+		update.Execute();
+		conn.Commit();
+		update.Close();
+	}
+	catch (SAException &x)
+	{
+		// print error message
+		printf("%s\n", x.ErrText().GetMultiByteChars());
+		update.Close();
+	}
+}
+
+
 vector<Player> Data::getListFriend(Player player) {
 
 	vector<Player> rs;
@@ -177,7 +197,7 @@ vector<Player> Data::getListFriend(Player player) {
 bool Data::login(string username, string password) {
 	SACommand query(&conn);
 	try {
-		string sql = "SELECT * FROM account WHERE username like '" + username + "' AND password like '" + password + "'";
+		string sql = "SELECT * FROM account WHERE username like '" + username + "' AND password like '" + password + "' " + "AND status = 0";
 
 		query.setCommandText(sql.c_str());
 		query.Execute();

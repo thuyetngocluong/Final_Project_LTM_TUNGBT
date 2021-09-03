@@ -94,6 +94,10 @@ void				newClientConnect(LPPER_HANDLE_DATA, LPPER_IO_OPERATION_DATA, string, int
 void				clientDisconnect(Account*);
 Account*			findAccount(LPPER_HANDLE_DATA);
 
+
+Match*				getMatch(Account*);
+void				removeMatch(Match*);
+
 #include "CompletionPortServer.h"
 
 set<Account*> accounts;
@@ -150,12 +154,27 @@ void newClientConnect(LPPER_HANDLE_DATA perHandleData, LPPER_IO_OPERATION_DATA p
 }
 
 void clientDisconnect(Account *account) {
+
+	Match* match = getMatch(account);
+
+	if (match != NULL) {
+		if (account == match->xAcc) {
+			match->win = O_WIN;
+			endGame(match);
+		}
+		else {
+			match->win = X_WIN;
+			endGame(match);
+		}
+	}
+
 	CloseHandle(account->mutex);
 	cout << getCurrentDateTime() << " Client [" << account->IP << ":" << account->PORT << "]: Disconnected" << endl;
 	accounts.erase(account);
 	while (!account->requests.empty()) account->requests.pop();
 	while (!account->messagesNeesToSend.empty()) account->messagesNeesToSend.pop();
 	closesocket(account->perHandleData->socket);
+	database->updateStatus(account->username, 0);
 	delete account;
 }
 
@@ -199,7 +218,6 @@ Account* findAccount(LPPER_HANDLE_DATA perHandleData) {
 	return NULL;
 }
 
-
 /*
 * @function login: solve login command of the account with the request
 * @param account: the account need to solve request
@@ -217,6 +235,7 @@ void solveLoginReq(Account *account, Message &request) {
 	//if the account already logged 
 	if (database->login(username, password) && account->signInStatus != LOGGED) {
 		account->username = username;
+		database->updateStatus(account->username, 1);
 		account->signInStatus = LOGGED;
 		response.content = reform(RES_LOGIN_SUCCESSFUL, SIZE_RESPONSE_CODE);
 		vector<Player> listFr = database->getListFriend(database->getPlayerByName(account->username));
@@ -257,6 +276,7 @@ void solveLogoutReq(Account *account, Message &request) {
 	}
 	else {
 		account->signInStatus = NOT_LOGGED;
+		database->updateStatus(account->username, 0);
 		response.content = reform(RES_LOGOUT_SUCCESSFUL, SIZE_RESPONSE_CODE);
 		saveLog(account, request, RES_LOGOUT_SUCCESSFUL);
 	}
@@ -287,7 +307,10 @@ void solveReqRegisterAccount(Account *account, Message &request) {
 
 /**Solve Get List request**/
 void solveGetListFriendReq(Account *account, Message &request) {
-
+	if (account->signInStatus != LOGGED) {
+		account->send(Message(RESPONSE, reform(RES_LOGIN_FAIL, SIZE_RESPONSE_CODE)));
+		return;
+	}
 	vector<Player> listFr = database->getListFriend(database->getPlayerByName(account->username));
 	string listFrReform = "";
 	int i = 0;
@@ -307,6 +330,10 @@ void solveGetListFriendReq(Account *account, Message &request) {
 
 /**Solve Add Friend request**/
 void solveSendFriendInvitationReq(Account *account, Message &request) {
+	if (account->signInStatus != LOGGED) {
+		account->send(Message(RESPONSE, reform(RES_LOGIN_FAIL, SIZE_RESPONSE_CODE)));
+		return;
+	}
 	Account *toAcc = findAccount(request.content);
 	
 	if (toAcc == NULL) {
@@ -322,6 +349,12 @@ void solveSendFriendInvitationReq(Account *account, Message &request) {
 
 /**Solve Challenge request**/
 void solveSendChallengeInvitationReq(Account *account, Message &request) {
+
+	if (account->signInStatus != LOGGED) {
+		account->send(Message(RESPONSE, reform(RES_LOGIN_FAIL, SIZE_RESPONSE_CODE)));
+		return;
+	}
+
 	Account *toAcc = findAccount(request.content);
 	
 	if (toAcc == NULL) {
@@ -357,6 +390,12 @@ void solveChatReq(Account *account, Message &request) {
 
 /**Solve Get request**/
 void solveResAcceptFriendInvitation(Account *account, Message &response) {
+
+	if (account->signInStatus != LOGGED) {
+		account->send(Message(RESPONSE, reform(RES_LOGIN_FAIL, SIZE_RESPONSE_CODE)));
+		return;
+	}
+
 	string username = response.content.substr(SIZE_RESPONSE_CODE);
 	Account *toAcc = findAccount(username);
 	// save db
@@ -373,6 +412,12 @@ void solveResAcceptFriendInvitation(Account *account, Message &response) {
 
 /**Solve Get request**/
 void solveResDenyFriendInvitation(Account *account, Message &response) {
+	
+	if (account->signInStatus != LOGGED) {
+		account->send(Message(RESPONSE, reform(RES_LOGIN_FAIL, SIZE_RESPONSE_CODE)));
+		return;
+	}
+
 	string username = response.content.substr(SIZE_RESPONSE_CODE);
 	Account *toAcc = findAccount(username);
 	if (toAcc != NULL) {
@@ -383,6 +428,12 @@ void solveResDenyFriendInvitation(Account *account, Message &response) {
 
 /**Solve Get request**/
 void solveResAcceptChallengeInvitation(Account *account, Message &response) {
+
+	if (account->signInStatus != LOGGED) {
+		account->send(Message(RESPONSE, reform(RES_LOGIN_FAIL, SIZE_RESPONSE_CODE)));
+		return;
+	}
+
 	string username = response.content.substr(SIZE_RESPONSE_CODE);
 	Account *toAcc = findAccount(username);
 
@@ -404,6 +455,12 @@ void solveResAcceptChallengeInvitation(Account *account, Message &response) {
 
 /**Solve Get request**/
 void solveResDenyChallengInvitation(Account *account, Message &response) {
+
+	if (account->signInStatus != LOGGED) {
+		account->send(Message(RESPONSE, reform(RES_LOGIN_FAIL, SIZE_RESPONSE_CODE)));
+		return;
+	}
+
 	string username = response.content.substr(SIZE_RESPONSE_CODE);
 	Account *toAcc = findAccount(username);
 
@@ -441,6 +498,12 @@ void removeMatch(Match *match) {
 
 /**Solve Stop Match request**/
 void solveStopMatchReq(Account *account, Message &request) {
+
+	if (account->signInStatus != LOGGED) {
+		account->send(Message(RESPONSE, reform(RES_LOGIN_FAIL, SIZE_RESPONSE_CODE)));
+		return;
+	}
+
 	//
 	// get database
 	// solve request
@@ -471,6 +534,12 @@ void solveStopMatchReq(Account *account, Message &request) {
 /**Solve Play request**/
 // nhận tọa độ cập nhật vào bàn cờ, xử lý thắng thua,  thông báo thắng thua, cập nhật elo
 void solvePlayReq(Account *account, Message &request) {
+
+	if (account->signInStatus != LOGGED) {
+		account->send(Message(RESPONSE, reform(RES_LOGIN_FAIL, SIZE_RESPONSE_CODE)));
+		return;
+	}
+
 	Message response(RESPONSE, reform(RES_UNDENTIFIED, SIZE_RESPONSE_CODE));
 	string content = request.content;
 	size_t found = content.find("$");
@@ -490,7 +559,7 @@ void solvePlayReq(Account *account, Message &request) {
 			else {
 				save((char*)(match->nameLogFile.c_str()), getCurrentDateTime(), match->xAcc->username, xx, yy);
 
-				string rsp = reform(RES_PLAY_SUCCESSFUL, SIZE_RESPONSE_CODE) + match->xAcc->username + "&" + xx + "$" + yy;
+				string rsp = reform(RES_PLAY_SUCCESSFUL, SIZE_RESPONSE_CODE) + "X&" + xx + "$" + yy;
 				
 				switch (match->xPlay(x, y)) {
 				case WIN:
@@ -518,7 +587,7 @@ void solvePlayReq(Account *account, Message &request) {
 			else {
 				save((char*)(match->nameLogFile.c_str()), getCurrentDateTime(), match->oAcc->username, xx, yy);
 
-				string rsp = reform(RES_PLAY_SUCCESSFUL, SIZE_RESPONSE_CODE) + match->oAcc->username + "&" + xx + "$" + yy;
+				string rsp = reform(RES_PLAY_SUCCESSFUL, SIZE_RESPONSE_CODE) + "O&" + xx + "$" + yy;
 				match->xAcc->send(Message(RESPONSE, rsp));
 				match->oAcc->send(Message(RESPONSE, rsp));
 
