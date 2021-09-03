@@ -205,58 +205,6 @@ SK *sock;
 
 void(*onReceive) (string) = NULL;
 
-unsigned int __stdcall threadScreenInit(void *param) {
-	while (1) {
-		system("cls");
-		ScreenMenu(sock);
-	}
-	return -1;
-}
-
-unsigned int __stdcall threadScreenLogin(void *param) {
-	while (1) {
-		system("cls");
-		ScreenLogin(sock);
-	}
-	return -1;
-}
-
-unsigned int __stdcall threadScreenMain(void *param) {
-	while (1) {
-		system("cls");
-		ScreenMainMenu(sock);
-	}
-	return -1;
-}
-
-unsigned int __stdcall threadScreenPlayGame(void *param) {
-	while (1) {
-		system("cls");
-		game(sock);
-	}
-	return -1;
-}
-
-void changeScreen(int typeScreen) {
-	TerminateThread(screen, -1);
-	switch (typeScreen) {
-	case SCREEN_INIT:
-		screen = (HANDLE) _beginthreadex(0, 0, threadScreenInit, 0, 0, 0);
-		break;
-	case SCREEN_LOGIN:
-		screen = (HANDLE) _beginthreadex(0, 0, threadScreenLogin, 0, 0, 0);
-		break;
-	case SCREEN_MAIN:
-		screen = (HANDLE) _beginthreadex(0, 0, threadScreenMain, 0, 0, 0);
-		break;
-	case SCREEN_PLAY_GAME:
-		screen = (HANDLE) _beginthreadex(0, 0, threadScreenPlayGame, 0, 0, 0);
-		break;
-	}
-
-	currentScreen = typeScreen;
-}
-
 void something(string a) {
 	messageToResponse(a, sock->restMessage, sock->response);
 
@@ -275,25 +223,29 @@ void something(string a) {
 			haveGame = true;
 			counter = 0;
 			type = resp.content.at(0);
-			changeScreen(SCREEN_PLAY_GAME);
+			currentScreen = SCREEN_PLAY_GAME;
+			newScreen = true;
 			break;
 		case RESPONSE:
 			switch (responseCode)
 			{
 			case RES_LOGIN_SUCCESSFUL:
-				changeScreen(SCREEN_MAIN);
+				currentScreen = SCREEN_MAIN;
+				newScreen = true;
 				break;
 			case RES_LOGIN_FAIL:
 				printItem(columns / 3 + 3, 13, CLR_NORML, "LOGIN FAIL. PLEASE TRY AGAIN.");
 				Sleep(1000); // TODO: need to change
-				changeScreen(SCREEN_LOGIN);
+				currentScreen = SCREEN_LOGIN;
+				newScreen = true;
 				break;
 			case RES_GET_LIST_FRIEND_SUCCESSFUL:
 				listFriend = split(resp.content.substr(3), "$");
 				updateListFriend(listFriend);
 				break;
 			case RES_LOGOUT_SUCCESSFUL:
-				changeScreen(SCREEN_INIT);
+				currentScreen = SCREEN_INIT;
+				newScreen = true;
 				break;
 			case RES_PLAY_SUCCESSFUL: {
 				int pos1 = resp.content.find("&");
@@ -316,9 +268,9 @@ void something(string a) {
 
 
 
-
 int _tmain(int argc, _TCHAR* argv[])
 {
+
 	ShowConsoleCursor(false);
 	CONSOLE_SCREEN_BUFFER_INFO csbi;
 	GetConsoleScreenBufferInfo(GetStdHandle(STD_OUTPUT_HANDLE), &csbi);
@@ -403,10 +355,26 @@ int _tmain(int argc, _TCHAR* argv[])
 	dataSource.push_back({ "Logout", vector<string>() });
 
 
-
-	changeScreen(SCREEN_INIT);
-
-	while (1) {};
+	newScreen = true;
+	while (1) {
+		while (!newScreen) {};
+		newScreen = false;
+		system("cls");
+		switch (currentScreen) {
+		case SCREEN_INIT:
+			ScreenMenu(sock);
+			break;
+		case SCREEN_LOGIN:
+			ScreenLogin(sock);
+			break;
+		case SCREEN_MAIN:
+			ScreenMainMenu(sock);
+			break;
+		case SCREEN_PLAY_GAME:
+			game(sock);
+			break;
+		}
+	}
 
 	_getch();
 	return 0;
