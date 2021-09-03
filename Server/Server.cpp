@@ -252,12 +252,12 @@ void solveLogoutReq(Account *account, Message &request) {
 	Message response(RESPONSE, reform(RES_UNDENTIFIED, SIZE_RESPONSE_CODE));
 
 	if (account->signInStatus == NOT_LOGGED) {
-		response.content = reform(RES_UNDENTIFIED, RES_LOGOUT_FAIL);
+		response.content = reform(RES_LOGOUT_FAIL, SIZE_RESPONSE_CODE);
 		saveLog(account, request, RES_LOGOUT_FAIL);
 	}
 	else {
 		account->signInStatus = NOT_LOGGED;
-		response.content = reform(RES_UNDENTIFIED, RES_LOGOUT_SUCCESSFUL);
+		response.content = reform(RES_LOGOUT_SUCCESSFUL, SIZE_RESPONSE_CODE);
 		saveLog(account, request, RES_LOGOUT_SUCCESSFUL);
 	}
 

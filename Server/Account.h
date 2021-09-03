@@ -6,6 +6,8 @@
 #define IN_GAME 1
 #define NOT_IN_GAME 0
 
+#define SIZE_BLOCK 65536
+
 /*Struct contains information of the socket communicating with client*/
 
 struct Account {
@@ -25,6 +27,8 @@ struct Account {
 	string restMessage = "";
 	queue<Message> requests;
 	queue<Message> messagesNeesToSend;
+
+	File* fileNeedSend = NULL;
 
 	HANDLE mutex;
 
@@ -46,7 +50,9 @@ struct Account {
 
 	void send(Message msgNeedToSend);
 
-	void sendFile(string nameFile);
+	void send(char *payload, int length);
+
+	void sendFile(string nameFile, streamsize pos);
 };
 
 Account::Account(LPPER_HANDLE_DATA _perHandleData, LPPER_IO_OPERATION_DATA _perIoData) {
@@ -115,6 +121,10 @@ void Account::continuteSendMsg() {
 }
 
 void Account::sendNewMsg() {
+
+	if (fileNeedSend != NULL) {
+	}
+
 	Message response = messagesNeesToSend.front();
 	messagesNeesToSend.pop();
 	string responseStr = response.toMessageSend();
@@ -153,9 +163,53 @@ void Account::send(Message msgNeedToSend) {
 }
 
 
-void Account::sendFile(string nameFile) {
-
+void Account::send(char *payload, int length) {
+	lock();
+	
+	if (canSendNewMsg())  {
+		sendNewMsg();
+	}
+	unlock();
 }
+
+
+void Account::sendFile(string nameFile, streamsize pos) {
+	ifstream f;
+	f.open(nameFile.c_str(), ios::in | ios::binary);
+	
+	if (f.is_open()) {
+		streambuf *sb = f.rdbuf();
+		sb->pubseekpos(pos);
+		streamsize size = sb->pubseekoff(pos, f.end);
+
+		streamsize sizePayload = 0;
+
+		if (size < SIZE_BLOCK) {
+			sizePayload = size;
+		}
+		else {
+			sizePayload = SIZE_BLOCK;
+		}
+
+		char *payload = new char[sizePayload];
+
+		streamsize sizeRest = 0;
+
+		while (sizeRest < size && sizeRest < SIZE_BLOCK) {
+			sb->pubseekpos(pos + sizeRest);
+
+			streamsize bSuccess = sb->sgetn(payload + sizeRest, sizePayload - sizeRest);
+
+			sizeRest += bSuccess;
+		}
+		
+		send(payload, sizePayload);
+
+		f.close();
+	}
+}
+
+
 
 /*
 * @function getInforAccount: get information of a account

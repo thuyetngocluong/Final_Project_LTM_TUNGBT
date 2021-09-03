@@ -1,5 +1,32 @@
 #pragma once
 
+
+/*
+* @function copy: copy all characters from src to dest
+* @param dest: array of chars destination
+* @param posDest: position to start copy of array of chars destination
+* @param src: array of chars need to copy
+* @param lengthSrc: length of src
+**/
+void copy(char *dest, int posDest, char* src, int lengthSrc) {
+	for (int i = posDest; i < posDest + lengthSrc; i++) {
+		dest[i] = src[i - posDest];
+	}
+}
+
+/*
+* @function copy: copy all characters from src to dest
+* @param dest: array of chars destination
+* @param posDest: position to start copy of array of chars destination
+* @param src: string need to copy
+* @param lengthSrc: length of src
+**/
+void copy(char *dest, int posDest, string src, int lengthSrc) {
+	for (int i = posDest; i < posDest + lengthSrc; i++) {
+		dest[i] = src.at(i - posDest);
+	}
+}
+
 /*
 * @function reform: reform a integer to string having numberOfChar characters
 * @function a: the integer need to reform

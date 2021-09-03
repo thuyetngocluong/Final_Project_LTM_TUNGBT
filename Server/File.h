@@ -12,6 +12,67 @@
 #define SAVE_FAIL false
 
 
+#define SIZE_OPCODE 2
+#define SIZE_LENGTH 5
+#define BLOCK_SIZE 65535
+
+struct File {
+	string fileName = "";
+	streamsize pos = 0;
+
+	File() {}
+
+	
+	File(string _fileName) {
+		this->fileName = fileName;
+	}
+
+
+	char *toCharArraySend(streamsize pos, int opCode) {
+		ifstream f;
+
+		f.open(fileName.c_str(), ios::in | ios::binary);
+		
+		if (!f.is_open()) return NULL;
+
+		streambuf *sb = f.rdbuf();
+		streamsize size = sb->pubseekoff(pos, f.end);
+		streamsize sizePayload = 0;
+		if (size < BLOCK_SIZE) {
+			sizePayload = size;
+		}
+		else {
+			sizePayload = BLOCK_SIZE;
+		}
+
+		char *payload = new char[sizePayload];
+
+		streamsize sizeRest = 0;
+
+		while (sizeRest < sizePayload) {
+			sb->pubseekpos(pos + sizeRest);
+
+			streamsize bSuccess = sb->sgetn(payload + sizeRest, sizePayload - sizeRest);
+
+			sizeRest += bSuccess;
+		}
+
+		char *msg = new char[SIZE_OPCODE + SIZE_LENGTH + sizePayload];
+		int index = 0;
+		copy(msg, index, to_string(opCode), SIZE_OPCODE);
+		index += SIZE_OPCODE;
+
+		copy(msg, index, reform(sizePayload, SIZE_LENGTH), SIZE_LENGTH);
+		index += SIZE_LENGTH;
+		copy(msg, index, payload, sizePayload);
+	
+		f.close();
+
+		return msg;
+	}
+};
+
+
 /*
 * @function getStatus: get status of username
 * @param request: message brings username
