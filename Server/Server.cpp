@@ -545,7 +545,9 @@ void solvePlayReq(Account *account, Message &request) {
 				save((char*)(match->nameLogFile.c_str()), getCurrentDateTime(), match->xAcc->username, xx, yy);
 
 				string rsp = reform(RES_PLAY_SUCCESSFUL, SIZE_RESPONSE_CODE) + "X&" + xx + "$" + yy;
-				
+				match->xAcc->send(Message(RESPONSE, rsp));
+				match->oAcc->send(Message(RESPONSE, rsp));
+
 				switch (match->xPlay(x, y)) {
 				case WIN:
 					match->win = X_WIN;
