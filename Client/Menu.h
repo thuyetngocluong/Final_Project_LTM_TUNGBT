@@ -1,5 +1,7 @@
 #pragma once
 
+#include "common.h"
+
 int getMenu(string items[])
 {
 	int pointer = 0;

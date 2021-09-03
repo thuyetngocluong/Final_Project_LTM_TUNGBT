@@ -20,6 +20,7 @@
 #define RIGHT   77
 #define ENTER   13
 #define STOP    59
+#define PLAY	60
 
 #define EMPTY   " - "
 #define HAS_X   " X "

@@ -15,6 +15,11 @@
 #define SERVER_ADDR "127.0.0.2"
 #define RECEIVE 0
 #define SEND 1
+#define SCREEN_INIT 0
+#define SCREEN_LOGIN 1
+#define SCREEN_MAIN 2
+#define SCREEN_PLAY_GAME 3
+
 
 #pragma comment(lib, "Ws2_32.lib")
 using namespace std;
@@ -23,14 +28,18 @@ int rows;
 int columns;
 HANDLE screen = GetStdHandle(STD_OUTPUT_HANDLE);
 HANDLE mutexx = CreateMutex(0, 0, 0);
+HANDLE mutexScreen = CreateMutex(0, 0, 0);
+bool newScreen = false;
+char keyPress = '\0';
 
-#include "common.h"
+int currentScreen = SCREEN_INIT;
+
 #include "Menu.h"
 #include "Utilities.h"
 #include "Message.h"
-#include "Game.h"
+
 #include "screen.h"
-#include "main-menu.h"
+//#include "main-menu.h"
 
 
 // Structure definition
@@ -60,7 +69,8 @@ struct SK {
 
 	LPPER_IO_OPERATION_DATA perIoData = NULL;
 	queue<string> needSendMessages;
-
+	string restMessage = "";
+	queue<Message> response;
 	HANDLE mutex;
 
 	SK(LPPER_HANDLE_DATA _perHandleData, LPPER_IO_OPERATION_DATA _perIoData) {
@@ -181,22 +191,86 @@ vector<SK*> socks;
 unsigned __stdcall serverWorkerThread(LPVOID CompletionPortID);
 SOCKET client;
 
-void ScreenMenu(SK *, int);
-void ScreenLogin(SK *, int);
+void ScreenMenu(SK *);
+void ScreenLogin(SK *);
+void game(SK *);
+vector<string> split(string, string);
+vector<string> listFriend;
+vector<string> listCanChallenge;
+vector<string> listFriendInvitation;
+vector<string> listChallengeInvitation;
+SK *sock;
+#include "main-menu.h"
+#include "Game.h"
 
 void(*onReceive) (string) = NULL;
 
 void something(string a) {
-	if (stoi(a.substr(2, 3)) == RES_LOGIN_SUCCESSFUL) {
-		system("cls");
-	}
-	else if (stoi(a.substr(2, 3)) == RES_LOGIN_FAIL){
-		
+	messageToResponse(a, sock->restMessage, sock->response);
+
+	while (!sock->response.empty()) {
+		Message resp = sock->response.front();
+		sock->response.pop();
+		int responseCode = atoi(resp.content.substr(0, 3).c_str());
+
+		switch (resp.command) {
+		case REQ_SEND_CHALLENGE_INVITATION:
+			listChallengeInvitation.push_back(resp.content);
+			updateListInvitationChallenge(listChallengeInvitation);
+			break;
+		case REQ_START_GAME:
+			drawHeader("Press [P] to Join Match!", false);
+			haveGame = true;
+			counter = 0;
+			type = resp.content.at(0);
+			currentScreen = SCREEN_PLAY_GAME;
+			newScreen = true;
+			break;
+		case RESPONSE:
+			switch (responseCode)
+			{
+			case RES_LOGIN_SUCCESSFUL:
+				currentScreen = SCREEN_MAIN;
+				newScreen = true;
+				break;
+			case RES_LOGIN_FAIL:
+				printItem(columns / 3 + 3, 13, CLR_NORML, "LOGIN FAIL. PLEASE TRY AGAIN.");
+				Sleep(1000); // TODO: need to change
+				currentScreen = SCREEN_LOGIN;
+				newScreen = true;
+				break;
+			case RES_GET_LIST_FRIEND_SUCCESSFUL:
+				listFriend = split(resp.content.substr(3), "$");
+				updateListFriend(listFriend);
+				break;
+			case RES_LOGOUT_SUCCESSFUL:
+				currentScreen = SCREEN_INIT;
+				newScreen = true;
+				break;
+			case RES_PLAY_SUCCESSFUL: {
+				int pos1 = resp.content.find("&");
+				int pos2 = resp.content.find("$");
+				string _type = resp.content.substr(3, 1);
+				string xx = resp.content.substr(pos1 + 1, 2);
+				string yy = resp.content.substr(pos2 + 1, 2);
+				drawBoard(atoi(xx.c_str()), atoi(yy.c_str()), _type);
+				counter++;
+			}
+				break;
+			case RES_PLAY_FAIL:
+				break;
+			}
+			break;
+		}
+
 	}
 }
 
+
+
 int _tmain(int argc, _TCHAR* argv[])
 {
+
 	ShowConsoleCursor(false);
 	CONSOLE_SCREEN_BUFFER_INFO csbi;
 	GetConsoleScreenBufferInfo(GetStdHandle(STD_OUTPUT_HANDLE), &csbi);
@@ -269,46 +343,36 @@ int _tmain(int argc, _TCHAR* argv[])
 		return 1;
 	}
 
-	SK *sock = new SK(perHandleData, perIoData);
+	sock = new SK(perHandleData, perIoData);
 	socks.push_back(sock);
 	sock->recvMsg();
 	string s;
 
+	dataSource.push_back({ "List Player Online", vector<string>() });
+	dataSource.push_back({ "List Challenger", vector<string>() });
+	dataSource.push_back({ "List Friend Invitation", vector<string>() });
+	dataSource.push_back({ "List Challenge Invitation", vector<string>() });
+	dataSource.push_back({ "Logout", vector<string>() });
+
+
+	newScreen = true;
 	while (1) {
-		//ScreenMenu(sock, columns);
-		COORD coord = { 100, 20 };
-		SetConsoleScreenBufferSize(screen, coord);
-		//elo
-		dataSource.push_back({ "List Player Online", vector<string>() });
-		dataSource.push_back({ "List Challenger", vector<string>() });
-		dataSource.push_back({ "List Friend Invitation", vector<string>() });
-		dataSource.push_back({ "List Challenge Invitation", vector<string>() });
-		dataSource.push_back({ "Logout", vector<string>() });
-
-		int selectTitle = 0;
-		int selectContent = -1;
-		int focusMode = TITLE;
-
-		ShowConsoleCursor(false);
-
-		while (1) {
-			system("cls");
-			pair<int, int> select = getMenu(selectTitle, -1);
-			selectTitle = select.first;
-			selectContent = select.second;
-			system("cls");
-			switch (selectTitle)
-			{
-			case 0:
-
-				break;
-			case 1:
-
-				break;
-			case 4:
-				exit(0);
-				break;
-			}
+		while (!newScreen) {};
+		newScreen = false;
+		system("cls");
+		switch (currentScreen) {
+		case SCREEN_INIT:
+			ScreenMenu(sock);
+			break;
+		case SCREEN_LOGIN:
+			ScreenLogin(sock);
+			break;
+		case SCREEN_MAIN:
+			ScreenMainMenu(sock);
+			break;
+		case SCREEN_PLAY_GAME:
+			game(sock);
+			break;
 		}
 	}
 
@@ -418,56 +482,72 @@ unsigned __stdcall serverWorkerThread(LPVOID completionPortID)
 	}
 }
 
-//void ScreenLogin(SK * client, int columns) {
-//	string menu1[] = { "BACK", "CONTINUE" };
-//	enum menu1 {
-//		BACK, CONTINUE
-//	};
-//
-//	printItem(columns / 2 - 2, 2, CLR_NORML, "CARO TAT");
-//	printItem(columns / 2 - 8, 6, CLR_NORML, "****** LOGIN ******");
-//	string username, password;
-//	ShowConsoleCursor(true);
-//	printItem(columns / 3 + 3, 10, CLR_NORML, "Username: ");
-//	printItem(columns / 3 + 3, 13, CLR_NORML, "Password: ");
-//	gotoxy(columns / 3 + 3 + 10, 10);
-//	getline(cin, username);
-//	gotoxy(columns / 3 + 3 + 10, 13);
-//	getline(cin, password);
-//	ShowConsoleCursor(false);
-//	int command = getMenu1(menu1);
-//	system("cls");
-//
-//	Message *msg;
-//
-//	switch (command) {
-//	case CONTINUE:
-//		msg = new Message(REQ_LOGIN, username + "$" + password);
-//		client->send(msg->toMessageSend());
-//		break;
-//	case BACK:
-//		ScreenMenu(client, columns);
-//		break;
-//	}
-//}
-//
-//void ScreenMenu(SK * client) {
-//	string menu[] = { "LOGIN", "EXIT" };
-//	enum menu
-//	{
-//		LOGIN, EXIT
-//	};
-//
-//	system("cls");
-//	int command = getMenu(menu);
-//	system("cls");
-//	switch (command)
-//	{
-//	case LOGIN:
-//		ScreenLogin(client);
-//		break;
-//	case EXIT:
-//		exit(0);
-//		break;
-//	}
-//}
+void ScreenLogin(SK * client) {
+	string menu1[] = { "BACK", "CONTINUE" };
+	enum menu1 {
+		BACK, CONTINUE
+	};
+
+	printItem(columns / 2 - 2, 2, CLR_NORML, "CARO TAT");
+	printItem(columns / 2 - 8, 6, CLR_NORML, "****** LOGIN ******");
+	string username, password;
+	ShowConsoleCursor(true);
+	printItem(columns / 3 + 3, 10, CLR_NORML, "Username: ");
+	printItem(columns / 3 + 3, 13, CLR_NORML, "Password: ");
+	gotoxy(columns / 3 + 3 + 10, 10);
+	getline(cin, username);
+	gotoxy(columns / 3 + 3 + 10, 13);
+	getline(cin, password);
+	ShowConsoleCursor(false);
+	int command = getMenu1(menu1);
+	system("cls");
+
+	Message *msg;
+
+	switch (command) {
+	case CONTINUE:
+		msg = new Message(REQ_LOGIN, username + "$" + password);
+		client->send(msg->toMessageSend());
+
+		break;
+	case BACK:
+		ScreenMenu(client);
+		break;
+	}
+}
+
+void ScreenMenu(SK * client) {
+	string menu[] = { "LOGIN", "EXIT" };
+	enum menu
+	{
+		LOGIN, EXIT
+	};
+
+	system("cls");
+	int command = getMenu(menu);
+	system("cls");
+	switch (command)
+	{
+	case LOGIN:
+		ScreenLogin(client);
+		break;
+	case EXIT:
+		exit(0);
+		break;
+	}
+}
+
+vector<string> split(string s, string delimiter) {
+	vector<string> list;
+	size_t pos = 0;
+	string token;
+
+	while ((pos = s.find(delimiter)) != string::npos) {
+		token = s.substr(0, pos);
+		list.push_back(token);
+		s.erase(0, pos + delimiter.length());
+	}
+
+	list.push_back(s);
+	return list;
+}

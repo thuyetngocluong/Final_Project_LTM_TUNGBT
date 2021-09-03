@@ -4,7 +4,7 @@
 #define SEPARATOR_VERTICAL_MAIN_MENU '\xB3'
 #define SEPARATOR_HORIZONTAL_MAIN_MENU '\xC4'
 #define WIDTH_SCREEN_TITLE 40
-#define WIDTH_SCREEN_CONTENT 40
+#define WIDTH_SCREEN_CONTENT 20
 
 #define HEADER 0
 #define CONTENT 1
@@ -22,6 +22,8 @@
 int selectingTitle = 0;
 int selectingContent = -1;
 int selectingPage = 0;
+bool draw = false;
+bool haveGame = false;
 
 vector<pair<string, vector<string>>> dataSource;
 
@@ -39,33 +41,40 @@ void drawHeader(string, bool);
 
 
 void updateListFriend(vector<string> listFriend) {
+	WaitForSingleObject(mutexx, INFINITE);
 	dataSource[0].second = listFriend;
 	drawTitle(0);
 	if (selectingTitle == 0) { drawContent(0, selectingPage); }
+	ReleaseMutex(mutexx);
 }
 
 void updateListChallenge(vector<string> listChallenge) {
+	WaitForSingleObject(mutexx, INFINITE);
 	dataSource[1].second = listChallenge;
 	drawTitle(1);
 	if (selectingTitle == 1) { drawContent(1, selectingPage); }
+	ReleaseMutex(mutexx);
 }
 
 void updateListInvitationFriend(vector<string> listInvitationFriend) {
+	WaitForSingleObject(mutexx, INFINITE);
 	dataSource[2].second = listInvitationFriend;
 	drawTitle(2);
 	if (selectingTitle == 2) { drawContent(2, selectingPage); }
+	ReleaseMutex(mutexx);
 }
 
 void updateListInvitationChallenge(vector<string> listInvitationChallenge) {
+	WaitForSingleObject(mutexx, INFINITE);
 	dataSource[3].second = listInvitationChallenge;
 	drawTitle(3);
 	if (selectingTitle == 3) { drawContent(3, selectingPage); }
+	ReleaseMutex(mutexx);
 }
 
-pair<int, int> getMenu(int _selectTitle, int _selectContent)
+void ScreenMainMenu(SK* aSock)
 {
-	selectingTitle = _selectTitle;
-	selectingContent = _selectContent;
+	
 	int sizeTitles = dataSource.size();
 	int sizeContents = 0;
 	int pointer = 0;
@@ -73,20 +82,24 @@ pair<int, int> getMenu(int _selectTitle, int _selectContent)
 	int focusMode = TITLE;
 
 	WaitForSingleObject(mutexx, INFINITE);
+	system("cls");
 	drawTemplate();
 	drawTitle();
 	drawContent(selectingTitle, selectingPage);
 	drawPage();
+	draw = true;
 	ReleaseMutex(mutexx);
 
 	while (1)
 	{
+
 		color(CLR_NORML);
+		char key;
 		key = _getch();
 
 		WaitForSingleObject(mutexx, INFINITE);
 
-		sizeContents = dataSource[selectingTitle].second.size();
+		int sizeContents = dataSource[selectingTitle].second.size();
 
 		switch (key) {
 		case KEY_UP:
@@ -164,16 +177,32 @@ pair<int, int> getMenu(int _selectTitle, int _selectContent)
 		}
 		ReleaseMutex(mutexx);
 
+		if (key == PLAY && haveGame) {
+			break;
+		}
 
+		if (key == 'y' || key == 'Y') {
+			if (selectingTitle == 0 && selectingContent != -1) {
+				string nameAndElo = dataSource[selectingTitle].second[selectingContent];
+				string name = dataSource[selectingTitle].second[selectingContent].substr(0, nameAndElo.find("&"));
+				aSock->send(Message(REQ_SEND_CHALLENGE_INVITATION, name).toMessageSend());
+			}
 
-		if (key == ENTER)
+			if (selectingTitle == 3 && selectingContent != -1) {
+				string name = dataSource[selectingTitle].second[selectingContent];
+				aSock->send(Message(RESPONSE, reform(RES_ACCEPT_CHALLENGE_INVITATION, SIZE_RESPONSE_CODE) + name).toMessageSend());
+			}
+		}
+
+		if (key == ENTER && selectingTitle == 4)
 		{
+			string s = Message(REQ_LOGOUT, "").toMessageSend();
+			aSock->send(s);
+			//aSock->send(Message(REQ_LOGOUT, "").toMessageSend());
 			break;
 		}
 
 	}
-
-	return{ selectingTitle, selectingContent };
 }
 
 
@@ -209,11 +238,11 @@ void drawContent(int titleIndex, int page) {
 	}
 
 	if (selectingContent >= 0 && selectingContent < itemContent.size()) {
-		printItem(WIDTH_SCREEN_TITLE + 5, (selectingContent % MAX_CONTENT) * 2 + 4, COLOR_RED, "> " + itemContent[selectingContent], ' ', WIDTH_SCREEN_TITLE);
+		printItem(WIDTH_SCREEN_TITLE + 5, (selectingContent % MAX_CONTENT) * 2 + 4, COLOR_RED, "> " + itemContent[selectingContent], ' ', WIDTH_SCREEN_CONTENT);
 	}
 
 	for (int j = i; j < MAX_CONTENT; j++) {
-		printItem(WIDTH_SCREEN_TITLE + 5, j * 2 + 4, CLR_NORML, "", ' ', WIDTH_SCREEN_CONTENT);
+		printItem(WIDTH_SCREEN_TITLE + 5, j * 2 + 4, CLR_NORML, " ", ' ', WIDTH_SCREEN_CONTENT);
 	}
 }
 

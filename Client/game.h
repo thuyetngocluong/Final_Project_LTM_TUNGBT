@@ -1,8 +1,9 @@
 #pragma once
 
-using namespace std;
-
+HANDLE mutexGame = CreateMutex(0, 0, 0);
 string board[HEIGHT][WIDTH];
+int counter = 0;
+string type = "";
 
 void createBoard()
 {
@@ -15,9 +16,30 @@ void createBoard()
 	}
 }
 
-void game(SOCKET client, Message *msg, string req)
+void drawBoard() {
+
+}
+
+void drawBoard(int x, int y, string _type) {
+	
+	if (_type == "X") {
+		board[x][y] = HAS_X;
+		printItem(x * 3, y, CLR_X, board[x][y]);
+		color(CLR_NORML);
+	}
+	else if (_type == "O") {
+		board[x][y] = HAS_O;
+		printItem(x * 3, y, CLR_O, board[x][y]);
+		color(CLR_NORML);
+	}
+
+}
+
+void game(SK *sock)
 {
-	int pointerX = 0, pointerY = 0, counter = 0;
+	int turn = type == "X" ? 0 : 1;
+
+	int pointerX = 0, pointerY = 0;
 	char key;
 
 	createBoard();
@@ -48,6 +70,7 @@ void game(SOCKET client, Message *msg, string req)
 		print(WIDTH * 3 + 3, 3, CLR_NORML, "Press F1 to exit game.");
 
 		color(CLR_NORML);
+
 		key = _getch();
 
 		if (key == UP)
@@ -66,20 +89,22 @@ void game(SOCKET client, Message *msg, string req)
 		{
 			if (pointerX < WIDTH - 1) pointerX++;
 		}
-		if (key == ENTER)
+		if (key == ENTER && counter % 2 == turn)
+		//if (key == ENTER)
 		{
 			if (board[pointerX][pointerY] == EMPTY)
 			{
-				if (counter % 2 == 0)
+				/*if (counter % 2 == 0)
 				{
 					board[pointerX][pointerY] = HAS_X;
 				}
 				else
 				{
 					board[pointerX][pointerY] = HAS_O;
-				}
+				}*/
 				//play(client, msg, req, pointerX, pointerY); // SEND TO SERVER
-				counter++; 
+				sock->send(Message(REQ_PLAY_CHESS, reform(pointerX, 2) + "$" + reform(pointerY, 2)).toMessageSend());
+				//counter++; 
 				system("CLS");
 			}
 		}
@@ -88,7 +113,7 @@ void game(SOCKET client, Message *msg, string req)
 			int choice = MessageBox(NULL, L"Do you want to quit game?", L"Exit game", MB_OKCANCEL);
 			if (choice == 1)
 			{
-				//surrender(client, msg, req); //SEND TO SERVER
+				sock->send(Message(REQ_STOP_GAME, "").toMessageSend());
 				break; // RETURN TO ONLINE LIST
 			}
 		}

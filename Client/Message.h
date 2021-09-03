@@ -25,7 +25,7 @@
 #define REQ_PENDING_START_GAME 59
 #define REQ_CHAT 80
 
-#define RESPONSE_TO_CLIENT 90
+#define RESPONSE 90
 
 #define RESPONSE_TO_SERVER 99
 
@@ -106,20 +106,27 @@ bool check(string &msg_rcv) {
 * @param 
 * @param requests: the queue of request
 **/
-void parseMessage(queue<string> requestQueue, queue<Message> *requests) {
-	Message tmp;
-	string element;
-	while (!requestQueue.empty()) {
-		element = requestQueue.front();
-		if (check(element.substr(0, SIZE_COMMAND))) {
-			tmp.command = atoi(element.substr(SIZE_COMMAND, SIZE_RESPONSE_CODE).c_str());
-			tmp.content = element.substr(SIZE_COMMAND + SIZE_RESPONSE_CODE);
+void messageToResponse(string tmp, string &restMessage, std::queue<Message> &requests) {
+	Message request;
+	restMessage += tmp;
+	tmp = restMessage;
+	size_t found = restMessage.find(DELIMITER);
+
+	while (found != std::string::npos) {
+		restMessage = tmp.substr(found + SIZE_COMMAND);
+		string s = tmp.substr(0, found);
+
+		if (check(s) == true) {
+			request.command = atoi(s.substr(0, SIZE_COMMAND).c_str());
+			request.content = s.substr(SIZE_COMMAND, s.length() - 2);
 		}
 		else {
-			tmp.command = REQ_UNKNOWN;
-			tmp.content = element;
+			request.command = REQ_UNKNOWN;
+			request.content = s;
 		}
-		requestQueue.pop();
-		requests->push(tmp);
+
+		requests.push(request);
+		tmp = restMessage;
+		found = restMessage.find(DELIMITER);
 	}
 }
