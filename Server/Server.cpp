@@ -684,8 +684,10 @@ void endGame(Match *match) {
 	
 	save(("Time End : \t\t\t" + getCurrentDateTime()).c_str(), (char*)(match->nameLogFile.c_str()));
 	save("*************************************************************", (char*)(match->nameLogFile.c_str()));
-	match->xAcc = NOT_IN_GAME;
-	match->oAcc = NOT_IN_GAME;
+
+	match->xAcc->matchStatus = NOT_IN_GAME;
+	match->oAcc->matchStatus = NOT_IN_GAME;
+
 	removeMatch(match); 
 
 }
