@@ -204,7 +204,7 @@ bool Data::addFriendRelation(string username1, string username2) {
 	SACommand insert(&conn);
 
 	try {
-		string sql = "INSERT INTO friend (``id_person1`,`, ``id_person2`)`) VALUES ( '" + to_string(player1.getID()) + "', '" + to_string(player2.getID()) + "')";
+		string sql = "INSERT INTO friend (`id_person1`, `id_person2`) VALUES ( '" + to_string(player1.getID()) + "', '" + to_string(player2.getID()) + "')";
 		insert.setCommandText(sql.c_str());
 
 		insert.Execute();
