@@ -31,6 +31,7 @@ int rows;
 int columns;
 long long int currMilisec = 0;
 long long int startTurnTime = 0;
+int timeLeft = 0;
 bool isInGame = false;
 
 unsigned int __stdcall timerThread(void *params);
@@ -227,7 +228,7 @@ void something(string a) {
 
 		switch (resp.command) {
 		case REQ_SEND_CHALLENGE_INVITATION:
-			dataSource[3].second.push_back({ resp.content, ""});
+			dataSource[3].second.push_back({ resp.content, "" });
 			updateListInvitationChallenge(dataSource[3].second);
 			break;
 		case REQ_START_GAME:
@@ -236,6 +237,8 @@ void something(string a) {
 			counter = 0;
 			type = resp.content.at(0);
 			isInGame = true;
+			timeLeft = 20;
+			startTurnTime = currMilisec;
 			currentScreen = SCREEN_PLAY_GAME;
 			newScreen = true;
 			break;
@@ -246,8 +249,6 @@ void something(string a) {
 			ReleaseMutex(mutexGame);
 			haveGame = false;
 			isInGame = false;
-			//currentScreen = SCREEN_MAIN;
-			//newScreen = true;
 			break;
 		case RESPONSE:
 			switch (responseCode)
@@ -301,10 +302,14 @@ void something(string a) {
 				string _type = resp.content.substr(3, 1);
 				string xx = resp.content.substr(pos1 + 1, 2);
 				string yy = resp.content.substr(pos2 + 1, 2);
+				WaitForSingleObject(mutexGame, INFINITE);
 				drawBoard(atoi(xx.c_str()), atoi(yy.c_str()), _type);
+				ReleaseMutex(mutexGame);
 				counter++;
+				timeLeft = 20;
+				startTurnTime = currMilisec;
 			}
-				break;
+									  break;
 			case RES_PLAY_FAIL:
 				print(WIDTH * 3 + 3, 7, COLOR_RED, "Invalid move");
 				break;
@@ -638,7 +643,7 @@ vector<pair<string, string>> split(string s, string delimiter1, string delimiter
 		token = s.substr(0, pos);
 		name = token.substr(0, token.find(delimiter2));
 		elo = token.substr(token.find(delimiter2) + 1);
-		list.push_back({name, elo});
+		list.push_back({ name, elo });
 		s.erase(0, pos + delimiter1.length());
 	}
 
@@ -657,21 +662,34 @@ unsigned int __stdcall timerThread(void *params) {
 		currMilisec += 1;
 		onTick(currMilisec);
 	}
-	
+
 	return 1;
 }
 
 void workPerHunderedMilisec(long long int milisec) {
-	
+
 	if (!isInGame) return;
 
 	long long int delta = milisec - startTurnTime;
-		
+
+	timeLeft = 20 - delta;
+
 	if (delta < 20) {
-			
+		WaitForSingleObject(mutexGame, INFINITE);
+		print(WIDTH * 3 + 3, 4, CLR_NORML, "Time left: " + to_string(timeLeft));
+		ReleaseMutex(mutexGame);
 	}
 	else {
-		sock->send(Message(REQ_PLAY_CHESS, "").toMessageSend());
+		for (int i = 0; i < HEIGHT; i++)
+		{
+			for (int j = 0; j < WIDTH; j++)
+			{
+				if (board[i][j] == " - ") {
+					sock->send(Message(REQ_PLAY_CHESS, reform(i, 2) + "$" + reform(j, 2)).toMessageSend());
+					startTurnTime = currMilisec;
+					break;
+				}
+			}
+		}
 	}
-	
 }

@@ -74,7 +74,7 @@ void updateListInvitationChallenge(vector<pair<string, string>> _listInvitationC
 
 void ScreenMainMenu(SK* aSock)
 {
-	
+
 	int sizeTitles = dataSource.size();
 	int sizeContents = 0;
 	int pointer = 0;
