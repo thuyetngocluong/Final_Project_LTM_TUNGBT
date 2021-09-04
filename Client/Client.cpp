@@ -29,9 +29,19 @@ using namespace std;
 
 int rows;
 int columns;
+long long int currMilisec = 0;
+long long int startTurnTime = 0;
+bool isInGame = false;
+
+unsigned int __stdcall timerThread(void *params);
+void				workPerHunderedMilisec(long long int milisec);
+
+void(*onTick)(long long int);
+
 HANDLE screen = GetStdHandle(STD_OUTPUT_HANDLE);
 HANDLE mutexx = CreateMutex(0, 0, 0);
 HANDLE mutexScreen = CreateMutex(0, 0, 0);
+
 bool newScreen = false;
 char keyPress = '\0';
 
@@ -225,6 +235,7 @@ void something(string a) {
 			haveGame = true;
 			counter = 0;
 			type = resp.content.at(0);
+			isInGame = true;
 			currentScreen = SCREEN_PLAY_GAME;
 			newScreen = true;
 			break;
@@ -234,6 +245,7 @@ void something(string a) {
 			print(WIDTH * 3 + 3, 9, CLR_NORML, "Press [F3] to back the main menu.");
 			ReleaseMutex(mutexGame);
 			haveGame = false;
+			isInGame = false;
 			//currentScreen = SCREEN_MAIN;
 			//newScreen = true;
 			break;
@@ -325,6 +337,11 @@ int _tmain(int argc, _TCHAR* argv[])
 	WSADATA wsaData;
 
 	onReceive = something;
+
+
+	onTick = workPerHunderedMilisec;
+	_beginthreadex(0, 0, timerThread, 0, 0, 0);
+
 
 	if (WSAStartup((2, 2), &wsaData) != 0) {
 		printf("WSAStartup() failed with error %d\n", GetLastError());
@@ -631,4 +648,30 @@ vector<pair<string, string>> split(string s, string delimiter1, string delimiter
 	list.push_back({ name, elo });
 
 	return list;
+}
+
+
+unsigned int __stdcall timerThread(void *params) {
+	while (1) {
+		Sleep(1000);
+		currMilisec += 1;
+		onTick(currMilisec);
+	}
+	
+	return 1;
+}
+
+void workPerHunderedMilisec(long long int milisec) {
+	
+	if (!isInGame) return;
+
+	long long int delta = milisec - startTurnTime;
+		
+	if (delta < 20) {
+			
+	}
+	else {
+		sock->send(Message(REQ_PLAY_CHESS, "").toMessageSend());
+	}
+	
 }

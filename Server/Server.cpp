@@ -143,45 +143,6 @@ int _tmain(int argc, _TCHAR* argv[])
 	return 0;
 }
 
-//unsigned int __stdcall timerThread(void *params) {
-//	while (1) {
-//		Sleep(1000);
-//		currMilisec += 1;
-//		onTick(currMilisec);
-//	}
-//	
-//	return 1;
-//}
-//
-//void workPerHunderedMilisec(long long int milisec) {
-//	for (int i = 0; i < matches.size(); i++) {
-//		long long int delta = milisec - matches[i]->startTurnTime;
-//		Match *aMatch = matches[i];
-//		if (delta < 20) {
-//			aMatch->xAcc->send(Message(53, to_string(delta)));
-//			aMatch->oAcc->send(Message(53, to_string(delta)));
-//		}
-//		else {
-//			pair<int, int> pos = aMatch->findFirstCanPlay();
-//		
-//			if (aMatch->xCanPlay(pos.first, pos.second)) {
-//				aMatch->xPlay(pos.first, pos.second);
-//				string resp = reform(RES_PLAY_SUCCESSFUL, SIZE_RESPONSE_CODE) + "X&" + reform(pos.first, 2) + "$" + reform(pos.second, 2);
-//				aMatch->xAcc->send(Message(RESPONSE, resp));
-//				aMatch->oAcc->send(Message(RESPONSE, resp));
-//			}
-//			else {
-//				aMatch->oPlay(pos.first, pos.second);
-//				string resp = reform(RES_PLAY_SUCCESSFUL, SIZE_RESPONSE_CODE) + "O&" + reform(pos.first, 2) + "$" + reform(pos.second, 2);
-//				aMatch->xAcc->send(Message(RESPONSE, resp));
-//				aMatch->oAcc->send(Message(RESPONSE, resp));
-//			}
-//			
-//			aMatch->startTurnTime = milisec;
-//		}
-//	}
-//}
-
 
 void newClientConnect(LPPER_HANDLE_DATA perHandleData, LPPER_IO_OPERATION_DATA perIoData, string ip, int port) {
 	account = new Account(perHandleData, perIoData);
