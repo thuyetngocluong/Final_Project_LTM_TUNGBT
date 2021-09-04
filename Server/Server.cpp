@@ -96,8 +96,8 @@ void				newClientConnect(LPPER_HANDLE_DATA, LPPER_IO_OPERATION_DATA, string, int
 void				clientDisconnect(Account*);
 Account*			findAccount(LPPER_HANDLE_DATA);
 
-unsigned int __stdcall timerThread(void *params);
-void				workPerHunderedMilisec(long long int milisec);
+//unsigned int __stdcall timerThread(void *params);
+//void				workPerHunderedMilisec(long long int milisec);
 
 void(*onTick)(long long int);
 
@@ -117,7 +117,7 @@ HANDLE mutexSendingRequest;
 
 Data *database;
 
-long long int currMilisec = 0;
+//long long int currMilisec = 0;
 
 
 int _tmain(int argc, _TCHAR* argv[])
@@ -132,10 +132,10 @@ int _tmain(int argc, _TCHAR* argv[])
 
 	onNewClientConnect = newClientConnect;
 	
-	onTick = workPerHunderedMilisec;
+	//onTick = workPerHunderedMilisec;
 
 
-	_beginthreadex(0, 0, timerThread, 0, 0, 0);
+	//_beginthreadex(0, 0, timerThread, 0, 0, 0);
 
 	createServer(SERVER_ADDR, SERVER_PORT);
 
@@ -143,44 +143,44 @@ int _tmain(int argc, _TCHAR* argv[])
 	return 0;
 }
 
-unsigned int __stdcall timerThread(void *params) {
-	while (1) {
-		Sleep(1000);
-		currMilisec += 1;
-		onTick(currMilisec);
-	}
-	
-	return 1;
-}
-
-void workPerHunderedMilisec(long long int milisec) {
-	for (int i = 0; i < matches.size(); i++) {
-		long long int delta = milisec - matches[i]->startTurnTime;
-		Match *aMatch = matches[i];
-		if (delta < 20) {
-			aMatch->xAcc->send(Message(53, to_string(delta)));
-			aMatch->oAcc->send(Message(53, to_string(delta)));
-		}
-		else {
-			pair<int, int> pos = aMatch->findFirstCanPlay();
-		
-			if (aMatch->xCanPlay(pos.first, pos.second)) {
-				aMatch->xPlay(pos.first, pos.second);
-				string resp = reform(RES_PLAY_SUCCESSFUL, SIZE_RESPONSE_CODE) + "X&" + reform(pos.first, 2) + "$" + reform(pos.second, 2);
-				aMatch->xAcc->send(Message(RESPONSE, resp));
-				aMatch->oAcc->send(Message(RESPONSE, resp));
-			}
-			else {
-				aMatch->oPlay(pos.first, pos.second);
-				string resp = reform(RES_PLAY_SUCCESSFUL, SIZE_RESPONSE_CODE) + "O&" + reform(pos.first, 2) + "$" + reform(pos.second, 2);
-				aMatch->xAcc->send(Message(RESPONSE, resp));
-				aMatch->oAcc->send(Message(RESPONSE, resp));
-			}
-			
-			aMatch->startTurnTime = milisec;
-		}
-	}
-}
+//unsigned int __stdcall timerThread(void *params) {
+//	while (1) {
+//		Sleep(1000);
+//		currMilisec += 1;
+//		onTick(currMilisec);
+//	}
+//	
+//	return 1;
+//}
+//
+//void workPerHunderedMilisec(long long int milisec) {
+//	for (int i = 0; i < matches.size(); i++) {
+//		long long int delta = milisec - matches[i]->startTurnTime;
+//		Match *aMatch = matches[i];
+//		if (delta < 20) {
+//			aMatch->xAcc->send(Message(53, to_string(delta)));
+//			aMatch->oAcc->send(Message(53, to_string(delta)));
+//		}
+//		else {
+//			pair<int, int> pos = aMatch->findFirstCanPlay();
+//		
+//			if (aMatch->xCanPlay(pos.first, pos.second)) {
+//				aMatch->xPlay(pos.first, pos.second);
+//				string resp = reform(RES_PLAY_SUCCESSFUL, SIZE_RESPONSE_CODE) + "X&" + reform(pos.first, 2) + "$" + reform(pos.second, 2);
+//				aMatch->xAcc->send(Message(RESPONSE, resp));
+//				aMatch->oAcc->send(Message(RESPONSE, resp));
+//			}
+//			else {
+//				aMatch->oPlay(pos.first, pos.second);
+//				string resp = reform(RES_PLAY_SUCCESSFUL, SIZE_RESPONSE_CODE) + "O&" + reform(pos.first, 2) + "$" + reform(pos.second, 2);
+//				aMatch->xAcc->send(Message(RESPONSE, resp));
+//				aMatch->oAcc->send(Message(RESPONSE, resp));
+//			}
+//			
+//			aMatch->startTurnTime = milisec;
+//		}
+//	}
+//}
 
 
 void newClientConnect(LPPER_HANDLE_DATA perHandleData, LPPER_IO_OPERATION_DATA perIoData, string ip, int port) {
@@ -622,7 +622,7 @@ void solvePlayReq(Account *account, Message &request) {
 				string rsp = reform(RES_PLAY_SUCCESSFUL, SIZE_RESPONSE_CODE) + "X&" + xx + "$" + yy;
 				match->xAcc->send(Message(RESPONSE, rsp));
 				match->oAcc->send(Message(RESPONSE, rsp));
-				match->startTurnTime = currMilisec;
+				//match->startTurnTime = currMilisec;
 				switch (match->xPlay(x, y)) {
 				case WIN:
 					match->win = X_WIN;
@@ -650,7 +650,7 @@ void solvePlayReq(Account *account, Message &request) {
 				string rsp = reform(RES_PLAY_SUCCESSFUL, SIZE_RESPONSE_CODE) + "O&" + xx + "$" + yy;
 				match->xAcc->send(Message(RESPONSE, rsp));
 				match->oAcc->send(Message(RESPONSE, rsp));
-				match->startTurnTime = currMilisec;
+				//match->startTurnTime = currMilisec;
 				switch (match->oPlay(x, y)) {
 				case WIN:
 					match->win = O_WIN;
@@ -679,7 +679,7 @@ void solvePlayReq(Account *account, Message &request) {
 // viết log
 void startGame(Account *playerX, Account *playerO) {
 	Match* match = new Match(playerX, playerO); // tạo match
-	match->startTurnTime = currMilisec;
+	//match->startTurnTime = currMilisec;
 	matches.push_back(match); // gán match vào mảng
 
 	Message response_1(REQ_START_GAME, "X$" + playerX->username); 	// gửi request đến hai client
