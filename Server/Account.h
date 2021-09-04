@@ -50,9 +50,7 @@ struct Account {
 
 	void send(Message msgNeedToSend);
 
-	void send(char *payload, int length);
-
-	void sendFile(string nameFile, streamsize pos);
+	void sendFile(string nameFile);
 };
 
 Account::Account(LPPER_HANDLE_DATA _perHandleData, LPPER_IO_OPERATION_DATA _perIoData) {
@@ -163,49 +161,20 @@ void Account::send(Message msgNeedToSend) {
 }
 
 
-void Account::send(char *payload, int length) {
-	lock();
-	
-	if (canSendNewMsg())  {
-		sendNewMsg();
-	}
-	unlock();
-}
-
-
-void Account::sendFile(string nameFile, streamsize pos) {
+void Account::sendFile(string nameFile) {
 	ifstream f;
 	f.open(nameFile.c_str(), ios::in | ios::binary);
 	
 	if (f.is_open()) {
-		streambuf *sb = f.rdbuf();
-		sb->pubseekpos(pos);
-		streamsize size = sb->pubseekoff(pos, f.end);
+		string line;
 
-		streamsize sizePayload = 0;
-
-		if (size < SIZE_BLOCK) {
-			sizePayload = size;
+		send(Message(TRANSFILE_START, ""));
+		int lineIndex = 0;
+		while (getline(f, line)) {
+			send(Message(TRANSFILE_DATA, to_string(lineIndex) + "$" + line));
+			lineIndex++;
 		}
-		else {
-			sizePayload = SIZE_BLOCK;
-		}
-
-		char *payload = new char[sizePayload];
-
-		streamsize sizeRest = 0;
-
-		while (sizeRest < size && sizeRest < SIZE_BLOCK) {
-			sb->pubseekpos(pos + sizeRest);
-
-			streamsize bSuccess = sb->sgetn(payload + sizeRest, sizePayload - sizeRest);
-
-			sizeRest += bSuccess;
-		}
-		
-		send(payload, sizePayload);
-
-		f.close();
+		send(Message(TRANSFILE_FINISH, ""));
 	}
 }
 

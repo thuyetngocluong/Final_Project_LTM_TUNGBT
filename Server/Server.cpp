@@ -74,6 +74,7 @@ void				solveMsgRecv(Account*, Message&);
 void				solveLoginReq(Account*, Message&);
 void				solveLogoutReq(Account*, Message&);
 void				solveGetListFriendReq(Account*, Message&);
+void				solveGetListCanChallengeReq(Account*, Message&);
 void				solveSendFriendInvitationReq(Account*, Message&);
 void				solveSendChallengeInvitationReq(Account*, Message&);
 void				getLog(Account*, Message&);
@@ -296,6 +297,7 @@ void solveReqRegisterAccount(Account *account, Message &request) {
 void solveGetListFriendReq(Account *account, Message &request) {
 	if (account->signInStatus != LOGGED) {
 		account->send(Message(RESPONSE, reform(RES_LOGIN_FAIL, SIZE_RESPONSE_CODE)));
+		account->send(Message(RESPONSE, reform(RES_GET_LIST_FRIEND_FAIL, SIZE_RESPONSE_CODE)));
 		return;
 	}
 	vector<Player> listFr = database->getListFriend(database->getPlayerByName(account->username));
@@ -314,11 +316,33 @@ void solveGetListFriendReq(Account *account, Message &request) {
 
 }
 
+void solveGetListCanChallengeReq(Account*, Message&) {
+	if (account->signInStatus != LOGGED) {
+		account->send(Message(RESPONSE, reform(RES_LOGIN_FAIL, SIZE_RESPONSE_CODE)));
+		account->send(Message(RESPONSE, reform(RES_GET_LIST_CAN_CHALLENGE_FAIL, SIZE_RESPONSE_CODE)));
+		return;
+	}
+	vector<Player> listFr = database->getListFriend(database->getPlayerByName(account->username));
+	string listFrReform = "";
+	int i = 0;
+
+	for (auto player = listFr.begin(); player != listFr.end(); player++) {
+		i++;
+		listFrReform += player->getUsername() + "&" + to_string(player->getElo());
+		if (i != listFr.size()) listFrReform += "$";
+	}
+
+	string content = reform(RES_GET_LIST_CAN_CHALLENGE_SUCCESSFUL, SIZE_RESPONSE_CODE) + listFrReform;
+
+	account->send(Message(RESPONSE, content));
+}
+
 
 /**Solve Add Friend request**/
 void solveSendFriendInvitationReq(Account *account, Message &request) {
 	if (account->signInStatus != LOGGED) {
 		account->send(Message(RESPONSE, reform(RES_LOGIN_FAIL, SIZE_RESPONSE_CODE)));
+		account->send(Message(RESPONSE, reform(RES_SEND_FRIEND_INVITATION_FAIL, SIZE_RESPONSE_CODE)));
 		return;
 	}
 	Account *toAcc = findAccount(request.content);
@@ -339,6 +363,7 @@ void solveSendChallengeInvitationReq(Account *account, Message &request) {
 
 	if (account->signInStatus != LOGGED) {
 		account->send(Message(RESPONSE, reform(RES_LOGIN_FAIL, SIZE_RESPONSE_CODE)));
+		account->send(Message(RESPONSE, reform(RES_SEND_CHALLENGE_INVITATION_FAIL, SIZE_RESPONSE_CODE)));
 		return;
 	}
 
@@ -715,6 +740,9 @@ void solveRequestFromClient(Account *account, Message &request) {
 		break;
 	case REQ_GET_LIST_FRIEND:
 		solveGetListFriendReq(account, request);
+		break;
+	case REQ_GET_LIST_CAN_CHALLENGE:
+		solveGetListCanChallengeReq(account, request);
 		break;
 	case REQ_SEND_FRIEND_INVITATION:
 		solveSendFriendInvitationReq(account, request);
