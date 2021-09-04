@@ -21,7 +21,7 @@ void drawBoard() {
 }
 
 void drawBoard(int x, int y, string _type) {
-	
+
 	if (_type == "X") {
 		board[x][y] = HAS_X;
 		printItem(x * 3, y, CLR_X, board[x][y]);
@@ -45,6 +45,7 @@ void game(SK *sock)
 	createBoard();
 	while (1)
 	{
+		WaitForSingleObject(mutexGame, INFINITE);
 		ShowConsoleCursor(false);
 		for (int y = 0; y < HEIGHT; y++)
 		{
@@ -60,101 +61,66 @@ void game(SK *sock)
 			print(WIDTH * 3, y, 255, "*");
 		}
 
+		print(WIDTH * 3 + 3, 1, CLR_NORML, "You are " + type);
+
 		if (counter % 2 == 0) {
-			print(WIDTH * 3 + 3, 1, CLR_X, "X turn.");
+			print(WIDTH * 3 + 3, 3, CLR_X, "X turn.");
 		}
 		else {
-			print(WIDTH * 3 + 3, 1, CLR_O, "O turn.");
+			print(WIDTH * 3 + 3, 3, CLR_O, "O turn.");
 		}
 
-		print(WIDTH * 3 + 3, 3, CLR_NORML, "Press F1 to exit game.");
+		print(WIDTH * 3 + 3, 5, CLR_NORML, "Press [F1] to exit game.");
 
 		color(CLR_NORML);
-
+		ReleaseMutex(mutexGame);
 		key = _getch();
+		WaitForSingleObject(mutexGame, INFINITE);
+		if (haveGame) {
 
-		if (key == UP)
-		{
-			if (pointerY > 0) pointerY--;
-		}
-		if (key == DOWN)
-		{
-			if (pointerY < HEIGHT - 1) pointerY++;
-		}
-		if (key == LEFT)
-		{
-			if (pointerX > 0) pointerX--;
-		}
-		if (key == RIGHT)
-		{
-			if (pointerX < WIDTH - 1) pointerX++;
-		}
-		if (key == ENTER && counter % 2 == turn)
-		//if (key == ENTER)
-		{
-			if (board[pointerX][pointerY] == EMPTY)
+			if (key == UP)
 			{
-				/*if (counter % 2 == 0)
+				if (pointerY > 0) pointerY--;
+			}
+			if (key == DOWN)
+			{
+				if (pointerY < HEIGHT - 1) pointerY++;
+			}
+			if (key == LEFT)
+			{
+				if (pointerX > 0) pointerX--;
+			}
+			if (key == RIGHT)
+			{
+				if (pointerX < WIDTH - 1) pointerX++;
+			}
+			if (key == ENTER && counter % 2 == turn)
+			{
+				if (board[pointerX][pointerY] == EMPTY)
 				{
-					board[pointerX][pointerY] = HAS_X;
+					sock->send(Message(REQ_PLAY_CHESS, reform(pointerX, 2) + "$" + reform(pointerY, 2)).toMessageSend());
+					system("CLS");
 				}
-				else
+			}
+			if (key == STOP)
+			{
+				int choice = MessageBox(NULL, L"Do you want to quit game?", L"Exit game", MB_OKCANCEL);
+				if (choice == 1)
 				{
-					board[pointerX][pointerY] = HAS_O;
-				}*/
-				//play(client, msg, req, pointerX, pointerY); // SEND TO SERVER
-				sock->send(Message(REQ_PLAY_CHESS, reform(pointerX, 2) + "$" + reform(pointerY, 2)).toMessageSend());
-				//counter++; 
-				system("CLS");
+					sock->send(Message(REQ_STOP_GAME, "").toMessageSend());
+					//Sleep(1000);
+					//break;
+				}
 			}
 		}
-		if (key == STOP)
-		{
-			int choice = MessageBox(NULL, L"Do you want to quit game?", L"Exit game", MB_OKCANCEL);
-			if (choice == 1)
-			{
-				sock->send(Message(REQ_STOP_GAME, "").toMessageSend());
-				break; // RETURN TO ONLINE LIST
-			}
-		}
-	}
-}
-
-int getOnlineList(SOCKET client, Message *msg, string req, vector<string> users)
-{
-	int lenList = users.size();
-	int pointer = 0;
-	char key;
-
-	while (1)
-	{
-		for (int i = 0; i < lenList; i++)
-		{
-			if (i == pointer) print(0, i, CLR_FOCUS, users[i]);
-			else print(0, i, CLR_NORML, users[i]);
-		}
-		color(7);
-		cout << endl;
-		key = _getch();
-
-		if (key == UP)
-		{
-			if (pointer > 0) pointer--;
-			else pointer = lenList - 1;
-		}
-		if (key == DOWN)
-		{
-			if (pointer < lenList - 1) pointer++;
-			else pointer = 0;
-		}
-		if (key == ENTER)
-		{
-			if (pointer < lenList && pointer >= 0)
-			{
-				//challenge(client, msg, req, users[pointer]); // Send challenge to enemy to server
+		else {
+			if (key == 61) {
+				currentScreen = SCREEN_MAIN;
+				newScreen = true;
+				ReleaseMutex(mutexGame);
 				break;
 			}
 		}
+		ReleaseMutex(mutexGame);
 	}
-	return pointer;
 }
