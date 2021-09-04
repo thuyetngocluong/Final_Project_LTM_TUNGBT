@@ -9,6 +9,7 @@
 #include <iostream>
 #include <queue>
 #include <vector>
+#include <algorithm>
 
 #define PORT 6000
 #define DATA_BUFSIZE 8192
@@ -20,6 +21,7 @@
 #define SCREEN_MAIN 2
 #define SCREEN_PLAY_GAME 3
 #define SCREEN_REGISTER 4
+
 
 
 #pragma comment(lib, "Ws2_32.lib")
@@ -38,9 +40,6 @@ int currentScreen = SCREEN_INIT;
 #include "Menu.h"
 #include "Utilities.h"
 #include "Message.h"
-
-#include "screen.h"
-//#include "main-menu.h"
 
 
 // Structure definition
@@ -196,11 +195,12 @@ void ScreenMenu(SK *);
 void ScreenLogin(SK *);
 void ScreenRegister(SK *);
 void game(SK *);
-vector<string> split(string, string);
-vector<string> listFriend;
-vector<string> listCanChallenge;
-vector<string> listFriendInvitation;
-vector<string> listChallengeInvitation;
+//vector<string> split(string, string);
+vector<pair<string, string>> split(string, string, string);
+vector<pair<string, string>> listFriend;
+vector<pair<string, string>> listCanChallenge;
+vector<pair<string, string>> listFriendInvitation;
+vector<pair<string, string>> listChallengeInvitation;
 SK *sock;
 #include "main-menu.h"
 #include "Game.h"
@@ -217,16 +217,25 @@ void something(string a) {
 
 		switch (resp.command) {
 		case REQ_SEND_CHALLENGE_INVITATION:
-			listChallengeInvitation.push_back(resp.content);
-			updateListInvitationChallenge(listChallengeInvitation);
+			dataSource[3].second.push_back({ resp.content, ""});
+			updateListInvitationChallenge(dataSource[3].second);
 			break;
 		case REQ_START_GAME:
-			drawHeader("Press [P] to Join Match!", false);
+			drawHeader("Press [F2] to join match!", false);
 			haveGame = true;
 			counter = 0;
 			type = resp.content.at(0);
 			currentScreen = SCREEN_PLAY_GAME;
 			newScreen = true;
+			break;
+		case REQ_END_GAME:
+			WaitForSingleObject(mutexGame, INFINITE);
+			print(WIDTH * 3 + 3, 7, CLR_NORML, resp.content + " is winner!!!");
+			print(WIDTH * 3 + 3, 9, CLR_NORML, "Press [F3] to back the main menu.");
+			ReleaseMutex(mutexGame);
+			haveGame = false;
+			//currentScreen = SCREEN_MAIN;
+			//newScreen = true;
 			break;
 		case RESPONSE:
 			switch (responseCode)
@@ -234,7 +243,7 @@ void something(string a) {
 			case RES_REGISTER_SUCCESSFUL:
 				printItem(columns / 3 + 3, 13, CLR_NORML, "REGISTER SUCCESSFUL. YOU CAN LOGIN.");
 				Sleep(2000); // TODO: need to change
-				currentScreen = SCREEN_MAIN;
+				currentScreen = SCREEN_INIT;
 				newScreen = true;
 				break;
 			case RES_REGISTER_FAIL:
@@ -254,8 +263,21 @@ void something(string a) {
 				newScreen = true;
 				break;
 			case RES_GET_LIST_FRIEND_SUCCESSFUL:
-				listFriend = split(resp.content.substr(3), "$");
+				listFriend = split(resp.content.substr(3), "$", "&");
 				updateListFriend(listFriend);
+				break;
+			case RES_GET_LIST_CAN_CHALLENGE_SUCCESSFUL:
+				listCanChallenge = split(resp.content.substr(3), "$", "&");
+				updateListChallenge(listCanChallenge);
+				break;
+			case RES_DENY_CHALLENGE_INVITATION:
+				drawHeader("The player refused the challenge", false);
+				break;
+			case RES_SEND_CHALLENGE_INVITATION_SUCCESSFUL:
+				drawHeader("Waiting for opponent", false);
+				break;
+			case RES_SEND_CHALLENGE_INVITATION_FAIL:
+				drawHeader("Unable to send your invitation", false);
 				break;
 			case RES_LOGOUT_SUCCESSFUL:
 				currentScreen = SCREEN_INIT;
@@ -272,8 +294,10 @@ void something(string a) {
 			}
 				break;
 			case RES_PLAY_FAIL:
+				print(WIDTH * 3 + 3, 7, COLOR_RED, "Invalid move");
 				break;
 			}
+
 			break;
 		}
 
@@ -362,11 +386,11 @@ int _tmain(int argc, _TCHAR* argv[])
 	sock->recvMsg();
 	string s;
 
-	dataSource.push_back({ "List Player Online", vector<string>() });
-	dataSource.push_back({ "List Challenger", vector<string>() });
-	dataSource.push_back({ "List Friend Invitation", vector<string>() });
-	dataSource.push_back({ "List Challenge Invitation", vector<string>() });
-	dataSource.push_back({ "Logout", vector<string>() });
+	dataSource.push_back({ "List Player Online", vector<pair<string, string>>() });
+	dataSource.push_back({ "List Challenger", vector<pair<string, string>>() });
+	dataSource.push_back({ "List Friend Invitation", vector<pair<string, string>>() });
+	dataSource.push_back({ "List Challenge Invitation", vector<pair<string, string>>() });
+	dataSource.push_back({ "Logout", vector<pair<string, string>>() });
 
 
 	newScreen = true;
@@ -588,19 +612,23 @@ void ScreenRegister(SK * client) {
 	}
 }
 
-
-
-vector<string> split(string s, string delimiter) {
-	vector<string> list;
+vector<pair<string, string>> split(string s, string delimiter1, string delimiter2) {
+	vector<pair<string, string>> list;
 	size_t pos = 0;
-	string token;
+	string token, name = "", elo = "";
 
-	while ((pos = s.find(delimiter)) != string::npos) {
+	while ((pos = s.find(delimiter1)) != string::npos) {
 		token = s.substr(0, pos);
-		list.push_back(token);
-		s.erase(0, pos + delimiter.length());
+		name = token.substr(0, token.find(delimiter2));
+		elo = token.substr(token.find(delimiter2) + 1);
+		list.push_back({name, elo});
+		s.erase(0, pos + delimiter1.length());
 	}
 
-	list.push_back(s);
+	//list.push_back(s.substr(0, s.find("&")));
+	name = s.substr(0, s.find(delimiter2));
+	elo = s.substr(s.find(delimiter2) + 1);
+	list.push_back({ name, elo });
+
 	return list;
 }

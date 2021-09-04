@@ -25,7 +25,7 @@ int selectingPage = 0;
 bool draw = false;
 bool haveGame = false;
 
-vector<pair<string, vector<string>>> dataSource;
+vector<pair<string, vector<pair<string, string>>>> dataSource;
 
 void drawTemplate();
 void drawContent(int, int);
@@ -40,33 +40,33 @@ void drawPage();
 void drawHeader(string, bool);
 
 
-void updateListFriend(vector<string> listFriend) {
+void updateListFriend(vector<pair<string, string>> _listFriend) {
 	WaitForSingleObject(mutexx, INFINITE);
-	dataSource[0].second = listFriend;
+	dataSource[0].second = _listFriend;
 	drawTitle(0);
 	if (selectingTitle == 0) { drawContent(0, selectingPage); }
 	ReleaseMutex(mutexx);
 }
 
-void updateListChallenge(vector<string> listChallenge) {
+void updateListChallenge(vector<pair<string, string>> _listChallenge) {
 	WaitForSingleObject(mutexx, INFINITE);
-	dataSource[1].second = listChallenge;
+	dataSource[1].second = _listChallenge;
 	drawTitle(1);
 	if (selectingTitle == 1) { drawContent(1, selectingPage); }
 	ReleaseMutex(mutexx);
 }
 
-void updateListInvitationFriend(vector<string> listInvitationFriend) {
+void updateListInvitationFriend(vector<pair<string, string>> _listInvitationFriend) {
 	WaitForSingleObject(mutexx, INFINITE);
-	dataSource[2].second = listInvitationFriend;
+	dataSource[2].second = _listInvitationFriend;
 	drawTitle(2);
 	if (selectingTitle == 2) { drawContent(2, selectingPage); }
 	ReleaseMutex(mutexx);
 }
 
-void updateListInvitationChallenge(vector<string> listInvitationChallenge) {
+void updateListInvitationChallenge(vector<pair<string, string>> _listInvitationChallenge) {
 	WaitForSingleObject(mutexx, INFINITE);
-	dataSource[3].second = listInvitationChallenge;
+	dataSource[3].second = _listInvitationChallenge;
 	drawTitle(3);
 	if (selectingTitle == 3) { drawContent(3, selectingPage); }
 	ReleaseMutex(mutexx);
@@ -81,6 +81,7 @@ void ScreenMainMenu(SK* aSock)
 	char key;
 	int focusMode = TITLE;
 
+	sock->send(Message(REQ_GET_LIST_CHALLENGE, "").toMessageSend());
 	WaitForSingleObject(mutexx, INFINITE);
 	system("cls");
 	drawTemplate();
@@ -183,22 +184,45 @@ void ScreenMainMenu(SK* aSock)
 
 		if (key == 'y' || key == 'Y') {
 			if (selectingTitle == 0 && selectingContent != -1) {
-				string nameAndElo = dataSource[selectingTitle].second[selectingContent];
-				string name = dataSource[selectingTitle].second[selectingContent].substr(0, nameAndElo.find("&"));
+				//string nameAndElo = dataSource[selectingTitle].second[selectingContent].first;
+				string name = dataSource[selectingTitle].second[selectingContent].first;
+				selectingContent = -1;
+				focusMode = TITLE;
+				aSock->send(Message(REQ_SEND_CHALLENGE_INVITATION, name).toMessageSend());
+			}
+
+			else if (selectingTitle == 1 && selectingContent != -1) {
+				//string nameAndElo = dataSource[selectingTitle].second[selectingContent];
+				string name = dataSource[selectingTitle].second[selectingContent].first;
+				selectingContent = -1;
+				focusMode = TITLE;
 				aSock->send(Message(REQ_SEND_CHALLENGE_INVITATION, name).toMessageSend());
 			}
 
 			if (selectingTitle == 3 && selectingContent != -1) {
-				string name = dataSource[selectingTitle].second[selectingContent];
+				string name = dataSource[selectingTitle].second[selectingContent].first;
+				dataSource[selectingTitle].second.erase(dataSource[selectingTitle].second.begin() + selectingContent);
+				selectingContent = -1;
+				focusMode = TITLE;
+				updateListInvitationChallenge(dataSource[selectingTitle].second);
 				aSock->send(Message(RESPONSE, reform(RES_ACCEPT_CHALLENGE_INVITATION, SIZE_RESPONSE_CODE) + name).toMessageSend());
+			}
+		}
+
+		if (key == 'n' || key == 'N') {
+			if (selectingTitle == 3 && selectingContent != -1) {
+				string name = dataSource[selectingTitle].second[selectingContent].first;
+				dataSource[selectingTitle].second.erase(dataSource[selectingTitle].second.begin() + selectingContent);
+				selectingContent = -1;
+				focusMode = TITLE;
+				updateListInvitationChallenge(dataSource[selectingTitle].second);
+				aSock->send(Message(RESPONSE, reform(RES_DENY_CHALLENGE_INVITATION, SIZE_RESPONSE_CODE) + name).toMessageSend());
 			}
 		}
 
 		if (key == ENTER && selectingTitle == 4)
 		{
-			string s = Message(REQ_LOGOUT, "").toMessageSend();
-			aSock->send(s);
-			//aSock->send(Message(REQ_LOGOUT, "").toMessageSend());
+			aSock->send(Message(REQ_LOGOUT, "").toMessageSend());
 			break;
 		}
 
@@ -229,16 +253,16 @@ void drawContent(int titleIndex, int page) {
 
 	if (selectingTitle != titleIndex || selectingTitle < 0 || selectingTitle >= dataSource.size()) return;
 
-	vector<string> itemContent = dataSource[selectingTitle].second;
+	vector<pair<string, string>> itemContent = dataSource[selectingTitle].second;
 
 	if (page * 10 > itemContent.size()) return;
 	int i = 0;
 	for (i = 0; i < itemContent.size() - page * MAX_CONTENT && i < MAX_CONTENT; i++) {
-		printItem(WIDTH_SCREEN_TITLE + 5, i * 2 + 4, CLR_NORML, "  " + itemContent[i + MAX_CONTENT * page], ' ', WIDTH_SCREEN_CONTENT);
+		printItem(WIDTH_SCREEN_TITLE + 5, i * 2 + 4, CLR_NORML, "  " + itemContent[i + MAX_CONTENT * page].first + " " + itemContent[i + MAX_CONTENT * page].second, ' ', WIDTH_SCREEN_CONTENT);
 	}
 
 	if (selectingContent >= 0 && selectingContent < itemContent.size()) {
-		printItem(WIDTH_SCREEN_TITLE + 5, (selectingContent % MAX_CONTENT) * 2 + 4, COLOR_RED, "> " + itemContent[selectingContent], ' ', WIDTH_SCREEN_CONTENT);
+		printItem(WIDTH_SCREEN_TITLE + 5, (selectingContent % MAX_CONTENT) * 2 + 4, COLOR_RED, "> " + itemContent[selectingContent].first + " " + itemContent[selectingContent].second, ' ', WIDTH_SCREEN_CONTENT);
 	}
 
 	for (int j = i; j < MAX_CONTENT; j++) {
@@ -278,15 +302,20 @@ void drawSelectContent(int prevSelect, int currentSelect) {
 
 	int sizeContent = dataSource[selectingTitle].second.size();
 
-	printItem(WIDTH_SCREEN_TITLE + 5, (prevSelect % MAX_CONTENT) * 2 + 4, CLR_NORML, "  " + dataSource[selectingTitle].second[prevSelect], ' ', WIDTH_SCREEN_CONTENT);
-	printItem(WIDTH_SCREEN_TITLE + 5, (currentSelect  % MAX_CONTENT) * 2 + 4, COLOR_RED, "> " + dataSource[selectingTitle].second[currentSelect], ' ', WIDTH_SCREEN_CONTENT);
+	printItem(WIDTH_SCREEN_TITLE + 5, (prevSelect % MAX_CONTENT) * 2 + 4, CLR_NORML, "  " + dataSource[selectingTitle].second[prevSelect].first + " " + dataSource[selectingTitle].second[prevSelect].second, ' ', WIDTH_SCREEN_CONTENT);
+	printItem(WIDTH_SCREEN_TITLE + 5, (currentSelect  % MAX_CONTENT) * 2 + 4, COLOR_RED, "> " + dataSource[selectingTitle].second[currentSelect].first + " " + dataSource[selectingTitle].second[currentSelect].second, ' ', WIDTH_SCREEN_CONTENT);
 
-	drawHeader(dataSource[selectingTitle].second[currentSelect], true);
+	if (selectingTitle == 0 || selectingTitle == 1) {
+		drawHeader("Challenge " + dataSource[selectingTitle].second[currentSelect].first + " ?", true);
+	}
+	else if (selectingTitle == 3) {
+		drawHeader("Play with " + dataSource[selectingTitle].second[currentSelect].first + " ?", true);
+	}
 }
 
 
 void drawHeader(string content, bool showChooseBox) {
-	printItem(0, 0, COLOR_RED, content, ' ', 30);
+	printItem(0, 0, COLOR_RED, content, ' ', 60);
 	if (showChooseBox) {
 		printItem(0, 1, CLR_NORML, "[Y] Yes");
 		printItem(0, 2, CLR_NORML, "[N] No");
