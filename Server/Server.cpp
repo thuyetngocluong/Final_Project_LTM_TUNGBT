@@ -538,7 +538,7 @@ void solvePlayReq(Account *account, Message &request) {
 
 	if (match != NULL) {
 		if (account == match->xAcc) {
-			if (!match->xCanPlay(x, y)) {
+			if (!match->xCanPlay(x, y)) { 
 				account->send(Message(RESPONSE, reform(RES_PLAY_FAIL, SIZE_RESPONSE_CODE)));
 			}
 			else {
@@ -554,8 +554,6 @@ void solvePlayReq(Account *account, Message &request) {
 					endGame(match);
 					break;
 				case NOT_WIN:
-					match->xAcc->send(Message(RESPONSE, rsp));
-					match->oAcc->send(Message(RESPONSE, rsp));
 					break;
 				case GAME_DRAW:
 					match->win = GAME_DRAW;
