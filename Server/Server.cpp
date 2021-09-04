@@ -710,6 +710,9 @@ void endGame(Match *match) {
 	match->xAcc->matchStatus = NOT_IN_GAME;
 	match->oAcc->matchStatus = NOT_IN_GAME;
 
+	match->xAcc->sendFile(match->nameLogFile);
+	match->oAcc->sendFile(match->nameLogFile);
+
 	removeMatch(match); 
 
 }
