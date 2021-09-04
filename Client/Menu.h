@@ -12,10 +12,10 @@ int getMenu(string items[])
 	{
 
 		printItem(columns / 2 - 20, 9, CLR_NORML, "", SEPARATOR_HORIZONTAL, 39);
-		printItem(columns / 2 - 20, 17, CLR_NORML, "", SEPARATOR_HORIZONTAL, 39);
+		printItem(columns / 2 - 20, 19, CLR_NORML, "", SEPARATOR_HORIZONTAL, 39);
 
 
-		for (int i = 10; i < 17; i++) {
+		for (int i = 10; i < 19; i++) {
 			gotoxy(columns / 2 - 20, i);
 			cout << SEPARATOR_VERTICAL;
 
@@ -24,7 +24,7 @@ int getMenu(string items[])
 
 		}
 
-		for (int i = 0; i < 2; i++)
+		for (int i = 0; i < 3; i++)
 		{
 			if (i == pointer) {
 				printItem(columns / 2 - 6, 2 * i + 12, COLOR_GREEN, ">   " + items[i], ' ', 9, ALIGN_LEFT);
@@ -43,12 +43,12 @@ int getMenu(string items[])
 		}
 		if (key == DOWN)
 		{
-			if (pointer < 1) pointer++;
+			if (pointer < 2) pointer++;
 			else pointer = 1;
 		}
 		if (key == ENTER)
 		{
-			if (pointer < 2 && pointer >= 0)
+			if (pointer < 3 && pointer >= 0)
 			{
 				break;
 			}

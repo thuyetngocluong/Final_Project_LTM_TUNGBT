@@ -19,6 +19,7 @@
 #define SCREEN_LOGIN 1
 #define SCREEN_MAIN 2
 #define SCREEN_PLAY_GAME 3
+#define SCREEN_REGISTER 4
 
 
 #pragma comment(lib, "Ws2_32.lib")
@@ -193,6 +194,7 @@ SOCKET client;
 
 void ScreenMenu(SK *);
 void ScreenLogin(SK *);
+void ScreenRegister(SK *);
 void game(SK *);
 vector<string> split(string, string);
 vector<string> listFriend;
@@ -229,13 +231,25 @@ void something(string a) {
 		case RESPONSE:
 			switch (responseCode)
 			{
+			case RES_REGISTER_SUCCESSFUL:
+				printItem(columns / 3 + 3, 13, CLR_NORML, "REGISTER SUCCESSFUL. YOU CAN LOGIN.");
+				Sleep(2000); // TODO: need to change
+				currentScreen = SCREEN_MAIN;
+				newScreen = true;
+				break;
+			case RES_REGISTER_FAIL:
+				printItem(columns / 3 + 3, 13, CLR_NORML, "REGISTER FAIL. PLEASE TRY AGAIN.");
+				Sleep(2000); // TODO: need to change
+				currentScreen = SCREEN_REGISTER;
+				newScreen = true;
+				break;
 			case RES_LOGIN_SUCCESSFUL:
 				currentScreen = SCREEN_MAIN;
 				newScreen = true;
 				break;
 			case RES_LOGIN_FAIL:
 				printItem(columns / 3 + 3, 13, CLR_NORML, "LOGIN FAIL. PLEASE TRY AGAIN.");
-				Sleep(1000); // TODO: need to change
+				Sleep(2000); // TODO: need to change
 				currentScreen = SCREEN_LOGIN;
 				newScreen = true;
 				break;
@@ -483,9 +497,9 @@ unsigned __stdcall serverWorkerThread(LPVOID completionPortID)
 }
 
 void ScreenLogin(SK * client) {
-	string menu1[] = { "BACK", "CONTINUE" };
+	string menu1[] = { "BACK", "LOGIN" };
 	enum menu1 {
-		BACK, CONTINUE
+		BACK, LOGIN
 	};
 
 	printItem(columns / 2 - 2, 2, CLR_NORML, "CARO TAT");
@@ -505,7 +519,7 @@ void ScreenLogin(SK * client) {
 	Message *msg;
 
 	switch (command) {
-	case CONTINUE:
+	case LOGIN:
 		msg = new Message(REQ_LOGIN, username + "$" + password);
 		client->send(msg->toMessageSend());
 
@@ -517,10 +531,10 @@ void ScreenLogin(SK * client) {
 }
 
 void ScreenMenu(SK * client) {
-	string menu[] = { "LOGIN", "EXIT" };
+	string menu[] = { "LOGIN", "REGISTER", "EXIT" };
 	enum menu
 	{
-		LOGIN, EXIT
+		LOGIN, REGISTER, EXIT
 	};
 
 	system("cls");
@@ -531,11 +545,50 @@ void ScreenMenu(SK * client) {
 	case LOGIN:
 		ScreenLogin(client);
 		break;
+	case REGISTER:
+		ScreenRegister(client);
+		break;
 	case EXIT:
 		exit(0);
 		break;
 	}
 }
+
+void ScreenRegister(SK * client) {
+	string menu1[] = { "BACK", "REGISTER" };
+	enum menu1 {
+		BACK, REGISTER
+	};
+
+	printItem(columns / 2 - 2, 2, CLR_NORML, "CARO TAT");
+	printItem(columns / 2 - 8, 6, CLR_NORML, "****** REGISTER ******");
+	string username, password;
+	ShowConsoleCursor(true);
+	printItem(columns / 3 + 3, 10, CLR_NORML, "Username: ");
+	printItem(columns / 3 + 3, 13, CLR_NORML, "Password: ");
+	gotoxy(columns / 3 + 3 + 10, 10);
+	getline(cin, username);
+	gotoxy(columns / 3 + 3 + 10, 13);
+	getline(cin, password);
+	ShowConsoleCursor(false);
+	int command = getMenu1(menu1);
+	system("cls");
+
+	Message *msg;
+
+	switch (command) {
+	case REGISTER:
+		msg = new Message(REQ_REGISTER, username + "$" + password);
+		client->send(msg->toMessageSend());
+
+		break;
+	case BACK:
+		ScreenMenu(client);
+		break;
+	}
+}
+
+
 
 vector<string> split(string s, string delimiter) {
 	vector<string> list;
