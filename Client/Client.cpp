@@ -10,6 +10,10 @@
 #include <queue>
 #include <vector>
 #include <algorithm>
+#include <fstream>
+#include <sstream>
+#include <filesystem>
+#include <utility>
 
 #define PORT 6000
 #define DATA_BUFSIZE 8192
@@ -113,8 +117,6 @@ struct SK {
 
 
 	void recvMsg() {
-		//cout << "Receive msg" << endl;
-
 		DWORD transferredBytes = 0;
 		DWORD flags = 0;
 		ZeroMemory(&(perIoData->overlapped), sizeof(OVERLAPPED));
@@ -137,9 +139,6 @@ struct SK {
 	}
 
 	void continuteSendMsg() {
-
-		//cout << "Continute send" << endl;
-
 		DWORD flags = 0;
 		DWORD transferredBytes = 0;
 		ZeroMemory(&(perIoData->overlapped), sizeof(OVERLAPPED));
@@ -160,9 +159,6 @@ struct SK {
 	}
 
 	void sendNewMsg() {
-
-		//cout << "New msg" << endl;
-
 		string msg = needSendMessages.front();
 		needSendMessages.pop();
 
@@ -206,31 +202,35 @@ void ScreenMenu(SK *);
 void ScreenLogin(SK *);
 void ScreenRegister(SK *);
 void game(SK *);
-//vector<string> split(string, string);
+
 vector<pair<string, string>> split(string, string, string);
 vector<pair<string, string>> listFriend;
 vector<pair<string, string>> listCanChallenge;
 vector<pair<string, string>> listFriendInvitation;
 vector<pair<string, string>> listChallengeInvitation;
 SK *sock;
+
 #include "main-menu.h"
 #include "Game.h"
 
 void(*onReceive) (string) = NULL;
 
-void something(string a) {
+void handleMessageReceived(string a) {
 	messageToResponse(a, sock->restMessage, sock->response);
 
 	while (!sock->response.empty()) {
 		Message resp = sock->response.front();
 		sock->response.pop();
 		int responseCode = atoi(resp.content.substr(0, 3).c_str());
+		ofstream file;
+		string fileName;
 
 		switch (resp.command) {
 		case REQ_SEND_CHALLENGE_INVITATION:
 			dataSource[3].second.push_back({ resp.content, "" });
 			updateListInvitationChallenge(dataSource[3].second);
 			break;
+
 		case REQ_START_GAME:
 			drawHeader("Press [F2] to join match!", false);
 			haveGame = true;
@@ -242,6 +242,7 @@ void something(string a) {
 			currentScreen = SCREEN_PLAY_GAME;
 			newScreen = true;
 			break;
+
 		case REQ_END_GAME:
 			WaitForSingleObject(mutexGame, INFINITE);
 			print(WIDTH * 3 + 3, 7, CLR_NORML, resp.content + " is winner!!!");
@@ -250,52 +251,87 @@ void something(string a) {
 			haveGame = false;
 			isInGame = false;
 			break;
+
+		case TRANSFILE_START: {
+			fileName = getCurrentDateTime("%d_%m_%Y_%H_%M_%S") + ".txt";
+			file.open(fileName.c_str(), ios::app || ios::binary);
+		}
+			break;
+
+		case TRANSFILE_DATA: {
+			int lineNumber = atoi(resp.content.substr(0, 2).c_str());
+			string lineContent = resp.content.substr(2);
+			if (file.is_open()) {
+				file << lineContent << endl;
+			}
+			else {
+				file.open(fileName.c_str(), ios::app || ios::binary); 
+				file << lineContent << endl;
+			}
+		}
+							 break;
+		case TRANSFILE_FINISH: {
+			if (file.is_open()) {
+				file.close();
+			}
+		}
+							   break;
 		case RESPONSE:
 			switch (responseCode)
 			{
 			case RES_REGISTER_SUCCESSFUL:
 				printItem(columns / 3 + 3, 13, CLR_NORML, "REGISTER SUCCESSFUL. YOU CAN LOGIN.");
-				Sleep(2000); // TODO: need to change
+				Sleep(2000);
 				currentScreen = SCREEN_INIT;
 				newScreen = true;
 				break;
+
 			case RES_REGISTER_FAIL:
 				printItem(columns / 3 + 3, 13, CLR_NORML, "REGISTER FAIL. PLEASE TRY AGAIN.");
-				Sleep(2000); // TODO: need to change
+				Sleep(2000);
 				currentScreen = SCREEN_REGISTER;
 				newScreen = true;
 				break;
+
 			case RES_LOGIN_SUCCESSFUL:
 				currentScreen = SCREEN_MAIN;
 				newScreen = true;
 				break;
+
 			case RES_LOGIN_FAIL:
 				printItem(columns / 3 + 3, 13, CLR_NORML, "LOGIN FAIL. PLEASE TRY AGAIN.");
-				Sleep(2000); // TODO: need to change
+				Sleep(2000);
 				currentScreen = SCREEN_LOGIN;
 				newScreen = true;
 				break;
+
 			case RES_GET_LIST_FRIEND_SUCCESSFUL:
 				listFriend = split(resp.content.substr(3), "$", "&");
 				updateListFriend(listFriend);
 				break;
+
 			case RES_GET_LIST_CAN_CHALLENGE_SUCCESSFUL:
 				listCanChallenge = split(resp.content.substr(3), "$", "&");
 				updateListChallenge(listCanChallenge);
 				break;
+
 			case RES_DENY_CHALLENGE_INVITATION:
 				drawHeader("The player refused the challenge", false);
 				break;
+
 			case RES_SEND_CHALLENGE_INVITATION_SUCCESSFUL:
 				drawHeader("Waiting for opponent", false);
 				break;
+
 			case RES_SEND_CHALLENGE_INVITATION_FAIL:
 				drawHeader("Unable to send your invitation", false);
 				break;
+
 			case RES_LOGOUT_SUCCESSFUL:
 				currentScreen = SCREEN_INIT;
 				newScreen = true;
 				break;
+
 			case RES_PLAY_SUCCESSFUL: {
 				int pos1 = resp.content.find("&");
 				int pos2 = resp.content.find("$");
@@ -310,14 +346,13 @@ void something(string a) {
 				startTurnTime = currMilisec;
 			}
 									  break;
+
 			case RES_PLAY_FAIL:
 				print(WIDTH * 3 + 3, 7, COLOR_RED, "Invalid move");
 				break;
 			}
-
 			break;
 		}
-
 	}
 }
 
@@ -325,7 +360,6 @@ void something(string a) {
 
 int _tmain(int argc, _TCHAR* argv[])
 {
-
 	ShowConsoleCursor(false);
 	CONSOLE_SCREEN_BUFFER_INFO csbi;
 	GetConsoleScreenBufferInfo(GetStdHandle(STD_OUTPUT_HANDLE), &csbi);
@@ -341,7 +375,7 @@ int _tmain(int argc, _TCHAR* argv[])
 	DWORD flags;
 	WSADATA wsaData;
 
-	onReceive = something;
+	onReceive = handleMessageReceived;
 
 
 	onTick = workPerHunderedMilisec;
@@ -636,6 +670,9 @@ void ScreenRegister(SK * client) {
 
 vector<pair<string, string>> split(string s, string delimiter1, string delimiter2) {
 	vector<pair<string, string>> list;
+	if (s == "") {
+		return vector<pair<string, string>>();
+	}
 	size_t pos = 0;
 	string token, name = "", elo = "";
 
@@ -647,7 +684,6 @@ vector<pair<string, string>> split(string s, string delimiter1, string delimiter
 		s.erase(0, pos + delimiter1.length());
 	}
 
-	//list.push_back(s.substr(0, s.find("&")));
 	name = s.substr(0, s.find(delimiter2));
 	elo = s.substr(s.find(delimiter2) + 1);
 	list.push_back({ name, elo });

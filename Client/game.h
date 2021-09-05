@@ -5,6 +5,9 @@ string board[HEIGHT][WIDTH];
 int counter = 0;
 string type = "";
 
+/**
+ * Initialize the board 
+ */
 void createBoard()
 {
 	for (int i = 0; i < HEIGHT; i++)
@@ -16,10 +19,12 @@ void createBoard()
 	}
 }
 
-void drawBoard() {
-
-}
-
+/**
+ * @function	drawBoard: draw the player's move
+ * @param		x: horizontal coordinates of console
+ * @param		y: vertical coordinates of console
+ * @param		_type: the player' type
+ */
 void drawBoard(int x, int y, string _type) {
 
 	if (_type == "X") {
@@ -35,6 +40,10 @@ void drawBoard(int x, int y, string _type) {
 
 }
 
+/**
+ * @function	game: play game
+ * @param		sock: struct SK connect to server
+ */
 void game(SK *sock)
 {
 	int turn = type == "X" ? 0 : 1;
@@ -108,8 +117,6 @@ void game(SK *sock)
 				if (choice == 1)
 				{
 					sock->send(Message(REQ_STOP_GAME, "").toMessageSend());
-					//Sleep(1000);
-					//break;
 				}
 			}
 		}

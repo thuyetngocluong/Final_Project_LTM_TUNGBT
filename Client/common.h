@@ -28,11 +28,21 @@
 #define ALIGN_LEFT 0
 #define ALIGN_RIGHT 1
 
+/*
+ * @function	color: set console text color
+ * @param		color: color coding in decimal
+ *
+ */
 void color(int color)
 {
 	SetConsoleTextAttribute(GetStdHandle(STD_OUTPUT_HANDLE), color);
 }
 
+/*
+ * @function	gotoxy: set console cursor to position
+ * @param		x: horizontal coordinates of console
+ * @param		y: vertical coordinates of console
+ */
 void gotoxy(int x, int y)
 {
 	COORD c;
@@ -41,6 +51,11 @@ void gotoxy(int x, int y)
 	SetConsoleCursorPosition(GetStdHandle(STD_OUTPUT_HANDLE), c);
 }
 
+/*
+ * @function	ShowConsoleCursor: set the console cursor visibility or invisibility
+ * @param		showFlag: true - the console cursor visibility
+ 						  false - the console cursor invisibility
+ */
 void ShowConsoleCursor(bool showFlag)
 {
 	CONSOLE_CURSOR_INFO cursorInfo;
@@ -50,11 +65,18 @@ void ShowConsoleCursor(bool showFlag)
 	SetConsoleCursorInfo(GetStdHandle(STD_OUTPUT_HANDLE), &cursorInfo);
 }
 
-void print(int x, int y, int colour, string item)
+/*
+ * @function	print: print content in console
+ * @param		x: horizontal coordinates of console
+ * @param		y: vertical coordinates of console
+ * @param		colour: text color of the content
+ * @param		content: text to print
+ */
+void print(int x, int y, int colour, string content)
 {
 	gotoxy(x, y);
 	color(colour);
-	cout << item;
+	cout << content;
 }
 
 void printItem(int x, int y, int colour, string item, char fillChar = ' ', int lengthItem = -1, int fillMode = ALIGN_LEFT)
