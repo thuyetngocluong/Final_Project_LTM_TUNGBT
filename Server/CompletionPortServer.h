@@ -19,7 +19,7 @@ bool createServer(string addressServer, int portServer) {
 		return false;
 	}
 
-	SOCKADDR_IN serverAddr, clientAddr;
+	SOCKADDR_IN serverAddr;
 	SOCKET listenSock, acceptSock;
 	HANDLE completionPort;
 	SYSTEM_INFO systemInfo;
@@ -28,6 +28,8 @@ bool createServer(string addressServer, int portServer) {
 	DWORD transferredBytes;
 	DWORD flags;
 	WSADATA wsaData;
+	SOCKADDR_IN clientAddr;
+	int lenAddr = sizeof(clientAddr);
 	char IP[INET_ADDRSTRLEN];
 	int PORT;
 
@@ -80,7 +82,7 @@ bool createServer(string addressServer, int portServer) {
 
 	while (1) {
 		// Step 5: Accept connections
-		if ((acceptSock = WSAAccept(listenSock, (sockaddr*)&clientAddr, NULL, NULL, 0)) == SOCKET_ERROR) {
+		if ((acceptSock = WSAAccept(listenSock, (sockaddr*)&clientAddr, &lenAddr, NULL, 0)) == SOCKET_ERROR) {
 			printf("WSAAccept() failed with error %d\n", WSAGetLastError());
 			continue;
 		}
@@ -106,8 +108,10 @@ bool createServer(string addressServer, int portServer) {
 			continue;
 		}
 
-		inet_ntop(AF_INET, &clientAddr, IP, INET_ADDRSTRLEN);
+		inet_ntop(AF_INET, &clientAddr.sin_addr, IP, sizeof(IP));
 		PORT = ntohs(clientAddr.sin_port);
+
+		cout << "New Connect \t" << IP  << " " << PORT << endl;
 
 		if (onNewClientConnect != NULL) {
 			onNewClientConnect(perHandleData, perIoData, IP, PORT);
