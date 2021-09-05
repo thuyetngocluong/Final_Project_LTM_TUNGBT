@@ -84,6 +84,8 @@ void ScreenMainMenu(SK* aSock)
 	sock->send(Message(REQ_GET_LIST_CHALLENGE, "").toMessageSend());
 	WaitForSingleObject(mutexx, INFINITE);
 	system("cls");
+	updateListFriend(listFriend);
+	updateListChallenge(listCanChallenge);
 	drawTemplate();
 	drawTitle();
 	drawContent(selectingTitle, selectingPage);
