@@ -715,14 +715,24 @@ void endGame(Match *match) {
 	default:
 		// chỉnh log, gửi file
 		break;
-	
-	} 
-	
+
+	}
+
 	save(("Time End : \t\t\t" + getCurrentDateTime()).c_str(), (char*)(match->nameLogFile.c_str()));
 	save("*************************************************************", (char*)(match->nameLogFile.c_str()));
 
 	match->xAcc->matchStatus = NOT_IN_GAME;
 	match->oAcc->matchStatus = NOT_IN_GAME;
+
+	// send log
+	match->xAcc->sendFile(match->nameLogFile);
+	match->oAcc->sendFile(match->nameLogFile);
+
+	for (auto i = accounts.begin(); i != accounts.end(); i++) {
+		Account *acc = (*i);
+		acc->send(listFriendToMessage(acc->username));
+		acc->send(listFriendToMessage(acc->username));
+	}
 
 	removeMatch(match); 
 
