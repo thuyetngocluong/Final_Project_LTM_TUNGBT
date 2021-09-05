@@ -98,9 +98,6 @@ Account*			findAccount(LPPER_HANDLE_DATA);
 Message				listFriendToMessage(string);
 Message				listCanChallangeToMessage(string);
 
-void(*onTick)(long long int);
-
-
 Match*				getMatch(Account*);
 void				removeMatch(Match*);
 
@@ -109,14 +106,10 @@ void				removeMatch(Match*);
 vector<Match*> matches;
 set<Account*> accounts;
 Account *account = NULL;
-static map<pair<Account*, Account*>, Match*> mapMatch;
 
-bool sendingRequest = false;
-HANDLE mutexSendingRequest;
 
 Data *database;
 
-//long long int currMilisec = 0;
 
 
 int _tmain(int argc, _TCHAR* argv[])
@@ -130,11 +123,6 @@ int _tmain(int argc, _TCHAR* argv[])
 	onReceive = receiveMessage;
 
 	onNewClientConnect = newClientConnect;
-	
-	//onTick = workPerHunderedMilisec;
-
-
-	//_beginthreadex(0, 0, timerThread, 0, 0, 0);
 
 	createServer(SERVER_ADDR, SERVER_PORT);
 
@@ -170,7 +158,7 @@ void clientDisconnect(Account *account) {
 	cout << getCurrentDateTime() << " Client [" << account->IP << ":" << account->PORT << "]: Disconnected" << endl;
 	accounts.erase(account);
 	while (!account->requests.empty()) account->requests.pop();
-	while (!account->messagesNeesToSend.empty()) account->messagesNeesToSend.pop();
+	while (!account->messagesNeedToSend.empty()) account->messagesNeedToSend.pop();
 	closesocket(account->perHandleData->socket);
 	database->updateStatus(account->username, 0);
 	delete account;

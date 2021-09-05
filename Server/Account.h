@@ -26,9 +26,7 @@ struct Account {
 
 	string restMessage = "";
 	queue<Message> requests;
-	queue<Message> messagesNeesToSend;
-
-	File* fileNeedSend = NULL;
+	queue<Message> messagesNeedToSend;
 
 	HANDLE mutex;
 
@@ -68,7 +66,7 @@ void Account::unlock() {
 }
 
 bool Account::canSendNewMsg() {
-	return ((perIoData->recvBytes <= perIoData->sentBytes) || (perIoData->operation == RECEIVE)) && !messagesNeesToSend.empty();
+	return ((perIoData->recvBytes <= perIoData->sentBytes) || (perIoData->operation == RECEIVE)) && !messagesNeedToSend.empty();
 }
 
 bool Account::canContinuteSendMsg() {
@@ -120,11 +118,8 @@ void Account::continuteSendMsg() {
 
 void Account::sendNewMsg() {
 
-	if (fileNeedSend != NULL) {
-	}
-
-	Message response = messagesNeesToSend.front();
-	messagesNeesToSend.pop();
+	Message response = messagesNeedToSend.front();
+	messagesNeedToSend.pop();
 	string responseStr = response.toMessageSend();
 	DWORD transferredBytes = 0;
 
@@ -153,7 +148,7 @@ void Account::sendNewMsg() {
 
 void Account::send(Message msgNeedToSend) {
 	lock();
-	messagesNeesToSend.push(msgNeedToSend);
+	messagesNeedToSend.push(msgNeedToSend);
 	if (canSendNewMsg()) {
 		sendNewMsg();
 	}

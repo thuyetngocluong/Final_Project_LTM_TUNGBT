@@ -1,9 +1,10 @@
 #pragma once
+#pragma once
 
-void (*onNewClientConnect)(LPPER_HANDLE_DATA, LPPER_IO_OPERATION_DATA, string, int) = NULL;
-void (*onReceive) (Account*, char*, int) = NULL;
+void(*onNewClientConnect)(LPPER_HANDLE_DATA, LPPER_IO_OPERATION_DATA, string, int) = NULL;
+void(*onReceive) (Account*, char*, int) = NULL;
 void(*onClientDisconnect)(Account*) = NULL;
-Account* (*getAccountHasEvent)(LPPER_HANDLE_DATA) = NULL;
+Account*	(*getAccountHasEvent)(LPPER_HANDLE_DATA) = NULL;
 
 
 bool createServer(string addressServer, int portServer) {
@@ -53,7 +54,7 @@ bool createServer(string addressServer, int portServer) {
 			return false;
 		}
 	}
-	
+
 	// Step 4: Create a listening socket
 	if ((listenSock = WSASocket(AF_INET, SOCK_STREAM, 0, NULL, 0, WSA_FLAG_OVERLAPPED)) == INVALID_SOCKET) {
 		printf("WSASocket() failed with error %d\n", WSAGetLastError());
@@ -104,14 +105,14 @@ bool createServer(string addressServer, int portServer) {
 			printf("GlobalAlloc() failed with error %d\n", GetLastError());
 			continue;
 		}
-		
-		inet_ntop(AF_INET, &clientAddr,IP, INET_ADDRSTRLEN);
+
+		inet_ntop(AF_INET, &clientAddr, IP, INET_ADDRSTRLEN);
 		PORT = ntohs(clientAddr.sin_port);
 
 		if (onNewClientConnect != NULL) {
 			onNewClientConnect(perHandleData, perIoData, IP, PORT);
 		}
-		
+
 	}
 	_getch();
 }
@@ -129,7 +130,7 @@ unsigned __stdcall serverWorkerThread(LPVOID completionPortID)
 	Account *account = NULL;
 
 	while (TRUE) {
-	
+
 		if (GetQueuedCompletionStatus(completionPort, &transferredBytes,
 			(LPDWORD)&perHandleData, (LPOVERLAPPED *)&perIoData, INFINITE) == 0) {
 			printf("GetQueuedCompletionStatus() failed with error %d\n", GetLastError());
@@ -180,7 +181,7 @@ unsigned __stdcall serverWorkerThread(LPVOID completionPortID)
 			}
 			else if (account->canSendNewMsg()) {
 				account->sendNewMsg();
-			} 
+			}
 			else if (account->numberReceiveInQueue <= 0) {
 				account->recvMsg();
 			}
