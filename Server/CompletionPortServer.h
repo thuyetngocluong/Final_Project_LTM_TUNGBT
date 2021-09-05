@@ -7,6 +7,8 @@ void(*onClientDisconnect)(Account*) = NULL;
 Account*	(*getAccountHasEvent)(LPPER_HANDLE_DATA) = NULL;
 
 
+
+/***Create Server**/
 bool createServer(string addressServer, int portServer) {
 
 	if (onNewClientConnect == NULL || onReceive == NULL
@@ -122,6 +124,7 @@ bool createServer(string addressServer, int portServer) {
 }
 
 
+/***Worker Thread Get Queue Completion Port**/
 unsigned __stdcall serverWorkerThread(LPVOID completionPortID)
 {
 	printf("Thread %d start!\n", GetCurrentThreadId());
