@@ -731,7 +731,7 @@ void endGame(Match *match) {
 	for (auto i = accounts.begin(); i != accounts.end(); i++) {
 		Account *acc = (*i);
 		acc->send(listFriendToMessage(acc->username));
-		acc->send(listFriendToMessage(acc->username));
+		acc->send(listCanChallangeToMessage(acc->username));
 	}
 
 	removeMatch(match); 
