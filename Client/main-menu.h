@@ -184,7 +184,6 @@ void ScreenMainMenu(SK* aSock)
 
 		if (key == 'y' || key == 'Y') {
 			if (selectingTitle == 0 && selectingContent != -1) {
-				//string nameAndElo = dataSource[selectingTitle].second[selectingContent].first;
 				string name = dataSource[selectingTitle].second[selectingContent].first;
 				selectingContent = -1;
 				focusMode = TITLE;
@@ -192,7 +191,6 @@ void ScreenMainMenu(SK* aSock)
 			}
 
 			else if (selectingTitle == 1 && selectingContent != -1) {
-				//string nameAndElo = dataSource[selectingTitle].second[selectingContent];
 				string name = dataSource[selectingTitle].second[selectingContent].first;
 				selectingContent = -1;
 				focusMode = TITLE;
@@ -223,6 +221,10 @@ void ScreenMainMenu(SK* aSock)
 		if (key == ENTER && selectingTitle == 4)
 		{
 			aSock->send(Message(REQ_LOGOUT, "").toMessageSend());
+			listFriend.clear();
+			listCanChallenge.clear();
+			listFriendInvitation.clear();
+			listChallengeInvitation.clear();
 			break;
 		}
 

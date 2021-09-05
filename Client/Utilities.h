@@ -35,5 +35,29 @@ bool isNumber(char *s) {
 	return true;
 }
 
+/*
+* @funtion getCurrentDateTime: get current date and time
+*
+* @return string brings information of current date and time
+**/
+string getCurrentDateTime(string form = "[%d/%m/%Y %H:%M:%S]") {
+	char MY_TIME[22];
+	struct tm newtime;
+	__time64_t long_time;
+	errno_t err;
+
+	// Get time as 64-bit integer.
+	_time64(&long_time);
+	// Convert to local time.
+	err = _localtime64_s(&newtime, &long_time);
+	if (err) {
+		return "[00/00/00 00:00:00]";
+	}
+	strftime(MY_TIME, sizeof(MY_TIME), form.c_str(), &newtime);
+	string result = MY_TIME;
+
+	return result;
+}
+
 
 

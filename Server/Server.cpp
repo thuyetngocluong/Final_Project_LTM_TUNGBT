@@ -67,24 +67,19 @@ void				deleteAccount(Account*);
 Account*			findAccount(string);
 Account*			findAccount(LPPER_HANDLE_DATA);
 
-void				solveRequestFromClient(Account*, Message&);
-void				solveResponseFromClient(Account*, Message&);
-void				solveMsgRecv(Account*, Message&);
-
 void				solveLoginReq(Account*, Message&);
 void				solveLogoutReq(Account*, Message&);
 void				solveGetListFriendReq(Account*, Message&);
 void				solveGetListCanChallengeReq(Account*, Message&);
 void				solveSendFriendInvitationReq(Account*, Message&);
 void				solveSendChallengeInvitationReq(Account*, Message&);
-void				getLog(Account*, Message&);
-void				solveChatReq(Account*, Message&);
 
 void				solveStopMatchReq(Account*, Message&);
 void				solvePlayReq(Account*, Message&);
 void				startGame(Account *player1, Account *player2);
 void				endGame(Match *match);
 
+void				solveRequestFromClient(Account*, Message&);
 void				solveResponseFromClient(Account*, Message&);
 void				solveMsgRecv(Account*, Message&);
 
@@ -131,6 +126,7 @@ int _tmain(int argc, _TCHAR* argv[])
 }
 
 
+/** Do when  new client connect */
 void newClientConnect(LPPER_HANDLE_DATA perHandleData, LPPER_IO_OPERATION_DATA perIoData, string ip, int port) {
 	account = new Account(perHandleData, perIoData);
 	account->IP = ip;
@@ -139,6 +135,8 @@ void newClientConnect(LPPER_HANDLE_DATA perHandleData, LPPER_IO_OPERATION_DATA p
 	account->recvMsg();
 }
 
+
+/** Do when  client disconnected*/
 void clientDisconnect(Account *account) {
 
 	Match* match = getMatch(account);
@@ -164,8 +162,10 @@ void clientDisconnect(Account *account) {
 	delete account;
 }
 
-void receiveMessage(Account* account, char* msg, int length) {
 
+
+/** Do when receive message from client */
+void receiveMessage(Account* account, char* msg, int length) {
 	messageToRequest(msg, account->restMessage, account->requests);
 
 	if (account->numberReceiveInQueue <= 0) {
@@ -205,6 +205,12 @@ Account* findAccount(LPPER_HANDLE_DATA perHandleData) {
 }
 
 
+/**
+* @function listFriendToMessage: get list ffriend
+* @param username: name of player get list ffriend
+*
+* @return the message to send
+***/
 Message	listFriendToMessage(string username) {
 	vector<Player> listFr = database->getListFriend(database->getPlayerByName(username));
 	int i = 0;
@@ -219,6 +225,13 @@ Message	listFriendToMessage(string username) {
 }
 
 
+
+/**
+* @function listCanChallangeToMessage: get list player can challenge
+* @param username: name of player get list challenge
+* 
+* @return the message to send 
+***/
 Message	listCanChallangeToMessage(string username) {
 	vector<Player> listFr = database->getListPlayerCanChallenge(username);
 	string listFrReform = "";
@@ -233,13 +246,13 @@ Message	listCanChallangeToMessage(string username) {
 	string content = reform(RES_GET_LIST_CAN_CHALLENGE_SUCCESSFUL, SIZE_RESPONSE_CODE) + listFrReform;
 	return Message(RESPONSE, content);
 }
-/*
-* @function login: solve login command of the account with the request
-* @param account: the account need to solve request
-* @param request: the request of the account
-*
-* @param: a message brings result code
-**/
+
+
+/**
+* @function solveLoginReq: solve login request
+* @param account: account send request
+* @param request: the request of account
+***/
 void solveLoginReq(Account *account, Message &request) {
 	Message response(RESPONSE, reform(RES_UNDENTIFIED, SIZE_RESPONSE_CODE));
 	string content = request.content;
@@ -265,25 +278,21 @@ void solveLoginReq(Account *account, Message &request) {
 }
 
 
-/*
-* @function logout: solve logout command of the account with the request
-* @param account: the account need to solve request
-* @param request: the request of the account
-*
-* @param: a message brings result code
-**/
+/**
+* @function solveLogoutReq: solve logout request
+* @param account: account send request
+* @param request: the request of account
+***/
 void solveLogoutReq(Account *account, Message &request) {
 	Message response(RESPONSE, reform(RES_UNDENTIFIED, SIZE_RESPONSE_CODE));
 
 	if (account->signInStatus == NOT_LOGGED) {
 		response.content = reform(RES_LOGOUT_FAIL, SIZE_RESPONSE_CODE);
-		saveLog(account, request, RES_LOGOUT_FAIL);
 	}
 	else {
 		account->signInStatus = NOT_LOGGED;
 		database->updateStatus(account->username, 0);
 		response.content = reform(RES_LOGOUT_SUCCESSFUL, SIZE_RESPONSE_CODE);
-		saveLog(account, request, RES_LOGOUT_SUCCESSFUL);
 	}
 
 	account->send(response);
@@ -291,7 +300,11 @@ void solveLogoutReq(Account *account, Message &request) {
 }
 
 
-/**Solve Register Account request**/
+/**
+* @function solveReqRegisterAccount: solve register request
+* @param account: account send request
+* @param request: the request of account
+***/
 void solveReqRegisterAccount(Account *account, Message &request) {
 	Message response(RESPONSE, reform(RES_UNDENTIFIED, SIZE_RESPONSE_CODE));
 	size_t found = request.content.find("$");
@@ -309,8 +322,11 @@ void solveReqRegisterAccount(Account *account, Message &request) {
 }
 
 
-
-/**Solve Get List request**/
+/**
+* @function solveGetListFriendReq: solve get list friend request
+* @param account: account send request
+* @param request: the request of account
+***/
 void solveGetListFriendReq(Account *account, Message &request) {
 	if (account->signInStatus != LOGGED) {
 		account->send(Message(RESPONSE, reform(RES_LOGIN_FAIL, SIZE_RESPONSE_CODE)));
@@ -334,7 +350,11 @@ void solveGetListFriendReq(Account *account, Message &request) {
 }
 
 
-
+/**
+* @function solveGetListCanChallengeReq: solve get list player can challenge request
+* @param account: account send request
+* @param request: the request of account
+***/
 void solveGetListCanChallengeReq(Account*, Message&) {
 	if (account->signInStatus != LOGGED) {
 		account->send(Message(RESPONSE, reform(RES_LOGIN_FAIL, SIZE_RESPONSE_CODE)));
@@ -347,7 +367,11 @@ void solveGetListCanChallengeReq(Account*, Message&) {
 }
 
 
-/**Solve Add Friend request**/
+/**
+* @function solveSendFriendInvitationReq: solve send add friend invitation request
+* @param account: account send request
+* @param request: the request of account
+***/
 void solveSendFriendInvitationReq(Account *account, Message &request) {
 	if (account->signInStatus != LOGGED) {
 		account->send(Message(RESPONSE, reform(RES_LOGIN_FAIL, SIZE_RESPONSE_CODE)));
@@ -367,7 +391,11 @@ void solveSendFriendInvitationReq(Account *account, Message &request) {
 }
 
 
-/**Solve Challenge request**/
+/**
+* @function solveSendChallengeInvitationReq: solve send challenge invitation request
+* @param account: account send request
+* @param request: the request of account
+***/
 void solveSendChallengeInvitationReq(Account *account, Message &request) {
 
 	if (account->signInStatus != LOGGED) {
@@ -392,21 +420,12 @@ void solveSendChallengeInvitationReq(Account *account, Message &request) {
 }
 
 
-/**Solve Get Log request**/
-void getLog(Account *account, Message &request) {
-	Message response(RESPONSE, reform(RES_UNDENTIFIED, SIZE_RESPONSE_CODE));
 
-
-}
-
-
-/**Solve Chat request**/
-void solveChatReq(Account *account, Message &request) {
-	Message response(RESPONSE, reform(RES_UNDENTIFIED, SIZE_RESPONSE_CODE));
-	
-}
-
-/**Solve Get request**/
+/**
+* @function solveResAcceptFriendInvitation: solve accept add friend invitation from client
+* @param account: account send request
+* @param response: the response of account
+***/
 void solveResAcceptFriendInvitation(Account *account, Message &response) {
 
 	if (account->signInStatus != LOGGED) {
@@ -430,12 +449,13 @@ void solveResAcceptFriendInvitation(Account *account, Message &response) {
 		// send list friend to toAcc
 		toAcc->send(listFriendToMessage(toAcc->username));
 	}
-
-	
-
 }
 
-/**Solve Get request**/
+/**
+* @function solveResDenyFriendInvitation: solve deny add friend invitation from client
+* @param account: account send request
+* @param response: the response of account
+***/
 void solveResDenyFriendInvitation(Account *account, Message &response) {
 	
 	if (account->signInStatus != LOGGED) {
@@ -451,7 +471,12 @@ void solveResDenyFriendInvitation(Account *account, Message &response) {
 	}
 }
 
-/**Solve Get request**/
+
+/**
+* @function solveResAcceptChallengeInvitation: solve accept challenge invitation from client
+* @param account: account send request
+* @param response: the response of account
+***/
 void solveResAcceptChallengeInvitation(Account *account, Message &response) {
 
 	if (account->signInStatus != LOGGED) {
@@ -478,7 +503,12 @@ void solveResAcceptChallengeInvitation(Account *account, Message &response) {
 	}
 }
 
-/**Solve Get request**/
+
+/**
+* @function solveResDenyChallengInvitation: solve deny challenge invitation from client
+* @param account: account send request
+* @param response: the response of account
+***/
 void solveResDenyChallengInvitation(Account *account, Message &response) {
 
 	if (account->signInStatus != LOGGED) {
@@ -519,7 +549,11 @@ void removeMatch(Match *match) {
 }
 
 
-/**Solve Stop Match request**/
+/**
+* @function solveStopMatchReq: solve stop request
+* @param account: account send request
+* @param request: the request of account
+***/
 void solveStopMatchReq(Account *account, Message &request) {
 
 	if (account->signInStatus != LOGGED) {
@@ -527,11 +561,6 @@ void solveStopMatchReq(Account *account, Message &request) {
 		return;
 	}
 
-	//
-	// get database
-	// solve request
-	//
-	// xử lý khi client đột ngột muốn kết thúc
 	Match* match = getMatch(account);
 	if (match == NULL) {
 		// TO-DO
@@ -554,8 +583,11 @@ void solveStopMatchReq(Account *account, Message &request) {
 
 
 
-/**Solve Play request**/
-// nhận tọa độ cập nhật vào bàn cờ, xử lý thắng thua,  thông báo thắng thua, cập nhật elo
+/**
+* @function solvePlayReq: solve play request
+* @param account: account send request
+* @param request: the request of account
+***/
 void solvePlayReq(Account *account, Message &request) {
 
 	if (account->signInStatus != LOGGED) {
@@ -638,8 +670,12 @@ void solvePlayReq(Account *account, Message &request) {
 }
 
 
-/** Send command StartGame to client**/
-// viết log
+
+/**
+* @function startGame: solve event start game
+* @param playerX: player play X in match
+* @param playerO: player play O in match
+***/
 void startGame(Account *playerX, Account *playerO) {
 	Match* match = new Match(playerX, playerO); // tạo match
 	//match->startTurnTime = currMilisec;
@@ -667,8 +703,11 @@ void startGame(Account *playerX, Account *playerO) {
 	
 }
 
-/** Send command EndGame to client**/
-// xóa match khỏi hàng đợi, gửi file log đến 2 client, cập nhật database
+
+/**
+* @function endgame: solve event end game
+* @param match: match need end or stop
+***/
 void endGame(Match *match) {
 
 	switch (match->win)
@@ -726,20 +765,9 @@ void endGame(Match *match) {
 
 }
 
-void sloveResRecivedRequestStartGame(Account *account, Message &request) {
-
-}
-
 
 /////////////////////////////////////////////////////////////
 
-/*
-* @function solve: solve request of the account
-* @param account: the account need to solve request
-* @param request: the request of account
-*
-* @return: the Message struct brings result code
-**/
 void solveMsgRecv(Account *account, Message &msg) {
 
 	switch (msg.command) {
@@ -779,9 +807,6 @@ void solveRequestFromClient(Account *account, Message &request) {
 		break;
 	case REQ_PLAY_CHESS:
 		solvePlayReq(account, request);
-		break;
-	case REQ_CHAT:
-		solveChatReq(account, request);
 		break;
 	default:
 		break;

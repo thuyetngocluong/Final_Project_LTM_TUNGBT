@@ -24,10 +24,12 @@
 #define REQ_PLAY_CHESS 52
 #define REQ_END_GAME 58
 #define REQ_PENDING_START_GAME 59
-#define REQ_CHAT 80
+
+#define TRANSFILE_START		80
+#define TRANSFILE_DATA		81
+#define TRANSFILE_FINISH	82
 
 #define RESPONSE 90
-
 #define RESPONSE_TO_SERVER 99
 
 
@@ -76,7 +78,7 @@
 string restMessage = "";
 
 struct Message {
-	int command;
+	int command; // command of Message
 	string content;//# content of Message
 
 	//constructor
@@ -90,12 +92,22 @@ struct Message {
 		this->content = "";
 	}
 
+	/*
+	 * @function	toMessageSend: transfer Message to string to send
+	 * @return		rs: string to send
+	 */
 	string toMessageSend() {
 		string rs = reform(command, SIZE_COMMAND) + content + DELIMITER;
 		return rs;
 	}
 };
 
+/**
+ * @funtion		check: check string contain only number
+ * @param		msg_rcv: string need to check
+ * @return		true - string contain only number
+				false - string contain only number
+ */
 bool check(string &msg_rcv) {
 	if (msg_rcv.length() < SIZE_COMMAND) return false;
 	for (int i = 0; i < SIZE_COMMAND; i++) {
@@ -105,11 +117,11 @@ bool check(string &msg_rcv) {
 }
 
 
-/*
-* @function 
-* @param 
-* @param requests: the queue of request
-**/
+/**
+ * @function 
+ * @param 
+ * @param requests: the queue of request
+ */
 void messageToResponse(string tmp, string &restMessage, std::queue<Message> &requests) {
 	Message request;
 	restMessage += tmp;
