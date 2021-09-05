@@ -95,9 +95,8 @@ void				receiveMessage(Account*, char*, int);
 void				newClientConnect(LPPER_HANDLE_DATA, LPPER_IO_OPERATION_DATA, string, int);
 void				clientDisconnect(Account*);
 Account*			findAccount(LPPER_HANDLE_DATA);
-
-//unsigned int __stdcall timerThread(void *params);
-//void				workPerHunderedMilisec(long long int milisec);
+Message				listFriendToMessage(string);
+Message				listCanChallangeToMessage(string);
 
 void(*onTick)(long long int);
 
@@ -217,6 +216,35 @@ Account* findAccount(LPPER_HANDLE_DATA perHandleData) {
 	return NULL;
 }
 
+
+Message	listFriendToMessage(string username) {
+	vector<Player> listFr = database->getListFriend(database->getPlayerByName(username));
+	int i = 0;
+	string listFrReform = "";
+	for (auto player = listFr.begin(); player != listFr.end(); player++) {
+		i++;
+		listFrReform += player->getUsername() + "&" + to_string(player->getElo());
+		if (i != listFr.size()) listFrReform += "$";
+	}
+
+	return Message(RESPONSE, reform(RES_GET_LIST_FRIEND_SUCCESSFUL, SIZE_RESPONSE_CODE) + listFrReform);
+}
+
+
+Message	listCanChallangeToMessage(string username) {
+	vector<Player> listFr = database->getListPlayerCanChallenge(username);
+	string listFrReform = "";
+	int i = 0;
+
+	for (auto player = listFr.begin(); player != listFr.end(); player++) {
+		i++;
+		listFrReform += player->getUsername() + "&" + to_string(player->getElo());
+		if (i != listFr.size()) listFrReform += "$";
+	}
+
+	string content = reform(RES_GET_LIST_CAN_CHALLENGE_SUCCESSFUL, SIZE_RESPONSE_CODE) + listFrReform;
+	return Message(RESPONSE, content);
+}
 /*
 * @function login: solve login command of the account with the request
 * @param account: the account need to solve request
@@ -237,19 +265,9 @@ void solveLoginReq(Account *account, Message &request) {
 		database->updateStatus(account->username, 1);
 		account->signInStatus = LOGGED;
 		response.content = reform(RES_LOGIN_SUCCESSFUL, SIZE_RESPONSE_CODE);
-		vector<Player> listFr = database->getListFriend(database->getPlayerByName(account->username));
-		int i = 0;
-		string listFrReform = "";
-		for (auto player = listFr.begin(); player != listFr.end(); player++) {
-			i++;
-			listFrReform += player->getUsername() + "&" + to_string(player->getElo());
-			if (i != listFr.size()) listFrReform += "$";
-		}
-
-		Message msgListFr(RESPONSE, reform(RES_GET_LIST_FRIEND_SUCCESSFUL, SIZE_RESPONSE_CODE) + listFrReform);
 
 		account->send(response); // send response
-		account->send(msgListFr); // send list friend
+		account->send(listFriendToMessage(account->username)); // send list friend
 	}
 	else {
 		response.content = reform(RES_LOGIN_FAIL, SIZE_RESPONSE_CODE);
@@ -335,19 +353,9 @@ void solveGetListCanChallengeReq(Account*, Message&) {
 		account->send(Message(RESPONSE, reform(RES_GET_LIST_CAN_CHALLENGE_FAIL, SIZE_RESPONSE_CODE)));
 		return;
 	}
-	vector<Player> listFr = database->getListPlayerCanChallenge(account->username);
-	string listFrReform = "";
-	int i = 0;
+	
 
-	for (auto player = listFr.begin(); player != listFr.end(); player++) {
-		i++;
-		listFrReform += player->getUsername() + "&" + to_string(player->getElo());
-		if (i != listFr.size()) listFrReform += "$";
-	}
-
-	string content = reform(RES_GET_LIST_CAN_CHALLENGE_SUCCESSFUL, SIZE_RESPONSE_CODE) + listFrReform;
-
-	account->send(Message(RESPONSE, content));
+	account->send(listCanChallangeToMessage(account->username));
 }
 
 
@@ -420,13 +428,19 @@ void solveResAcceptFriendInvitation(Account *account, Message &response) {
 
 	string username = response.content.substr(SIZE_RESPONSE_CODE);
 	Account *toAcc = findAccount(username);
-	// save db
-	// TO_DO
 	
+	// send list friend to account
+	database->addFriendRelation(account->username, username);
+
+	account->send(listFriendToMessage(account->username));
+	
+	// if toAcc not NULL
 	if (toAcc != NULL) {
-		database->addFriendRelation(account->username, toAcc->username);
 		Message requestToFr(RESPONSE, reform(RES_ACCEPT_FRIEND_INVITATION, SIZE_RESPONSE_CODE) + account->username);
 		toAcc->send(requestToFr);
+
+		// send list friend to toAcc
+		toAcc->send(listFriendToMessage(toAcc->username));
 	}
 
 	
@@ -709,9 +723,6 @@ void endGame(Match *match) {
 
 	match->xAcc->matchStatus = NOT_IN_GAME;
 	match->oAcc->matchStatus = NOT_IN_GAME;
-
-	match->xAcc->sendFile(match->nameLogFile);
-	match->oAcc->sendFile(match->nameLogFile);
 
 	removeMatch(match); 
 
