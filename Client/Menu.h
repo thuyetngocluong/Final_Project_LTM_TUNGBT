@@ -48,7 +48,7 @@ int getMenu(string items[])
 		if (key == DOWN)
 		{
 			if (pointer < 2) pointer++;
-			else pointer = 1;
+			else pointer = 2;
 		}
 		if (key == ENTER)
 		{
