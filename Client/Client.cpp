@@ -310,10 +310,12 @@ void handleMessageReceived(string a) {
 
 			case RES_GET_LIST_FRIEND_SUCCESSFUL:
 				listFriend = split(resp.content.substr(3), "$", "&");
+				if (currentScreen == SCREEN_MAIN) updateListFriend(listFriend);
 				break;
 
 			case RES_GET_LIST_CAN_CHALLENGE_SUCCESSFUL:
 				listCanChallenge = split(resp.content.substr(3), "$", "&");
+				if (currentScreen == SCREEN_MAIN) updateListChallenge(listCanChallenge);
 				break;
 
 			case RES_DENY_CHALLENGE_INVITATION:
@@ -714,7 +716,7 @@ void workPerHunderedMilisec(long long int milisec) {
 
 	if (delta < 20) {
 		WaitForSingleObject(mutexGame, INFINITE);
-		print(WIDTH * 3 + 3, 4, CLR_NORML, "Time left: " + to_string(timeLeft));
+		print(WIDTH * 3 + 3, 4, CLR_NORML, "Time left: " + reform(timeLeft, 2));
 		ReleaseMutex(mutexGame);
 	}
 	else {

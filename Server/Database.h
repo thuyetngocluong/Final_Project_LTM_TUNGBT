@@ -172,7 +172,7 @@ vector<Player> Data::getListFriend(Player player) {
 	SACommand query(&conn);
 
 	try {
-		string sql = "SELECT * FROM account where id IN (SELECT id_person2 as id FROM friend WHERE id_person1 = " + to_string(player.getID()) +
+		string sql = "SELECT * FROM account where status = 1 AND id IN (SELECT id_person2 as id FROM friend WHERE id_person1 = " + to_string(player.getID()) +
 			" UNION SELECT id_person1 as id FROM friend WHERE id_person2 = " + to_string(player.getID()) + ")";
 		query.setCommandText(sql.c_str());
 		query.Execute();
@@ -247,23 +247,11 @@ bool Data::login(string username, string password) {
 
 bool Data::checkValidChallenge(string fromPlayer, string toPlayer) {
 
-	SACommand query(&conn);
-	try {
-		string sql = "SELECT * FROM account WHERE username like '" + toPlayer + "' AND elo in ((SELECT elo FROM account WHERE elo >= (select elo from account where username like '" + fromPlayer + "') AND row_count() <= 10 GROUP BY elo ORDER BY elo ASC)  UNION (SELECT elo FROM account WHERE elo <= (select elo from account where username like '" + fromPlayer + "') AND row_count() <= 10 GROUP BY elo ORDER BY elo DESC))";
-
-		query.setCommandText(sql.c_str());
-		query.Execute();
-		if (query.FetchNext()) {
-			query.Close();
+	vector<Player> players = getListPlayerCanChallenge(fromPlayer);
+	for (int i = 0; i < players.size(); i++) {
+		if (players[i].getUsername() == toPlayer) {
 			return true;
 		}
-		query.Close();
-	}
-	catch (SAException &x)
-	{
-		// print error message
-		printf("%s\n", x.ErrText().GetMultiByteChars());
-		query.Close();
 	}
 	return false;
 }
@@ -273,19 +261,42 @@ vector<Player> Data::getListPlayerCanChallenge(string player) {
 	SACommand query(&conn);
 	vector<Player> rs;
 	try {
-		string sql = "SELECT * FROM account WHERE username not like '"
-			+ player + "' AND elo in ((SELECT elo FROM account WHERE elo >= (select elo from account where username like '"
-			+ player + "') AND row_count() <= 10 GROUP BY elo ORDER BY elo ASC)"
-			+ " UNION (SELECT elo FROM account WHERE elo <= (select elo from account where username like '"
-			+ player + "') AND row_count() <= 10 GROUP BY elo ORDER BY elo DESC))";
+		string sql = "SELECT * FROM account WHERE elo  < (select elo from account where username like '" + player + "') GROUP BY elo ORDER BY elo DESC LIMIT 10";
 		query.setCommandText(sql.c_str());
 		query.Execute();
 		while (query.FetchNext()) {
 			long id = query["id"].asLong();
 			string username = query["username"].asString().GetMultiByteChars();
 			long elo = query["elo"].asLong();
+			long status = query["status"].asLong();
+			if (status == 1) {
+				rs.push_back(Player(id, username, elo));
+			}
+		}
 
-			rs.push_back(Player(id, username, elo));
+		sql = "SELECT * FROM account WHERE elo  > (select elo from account where username like '" + player + "') GROUP BY elo ORDER BY elo ASC LIMIT 10";
+		query.setCommandText(sql.c_str());
+		query.Execute();
+		while (query.FetchNext()) {
+			long id = query["id"].asLong();
+			string username = query["username"].asString().GetMultiByteChars();
+			long elo = query["elo"].asLong();
+			long status = query["status"].asLong();
+			if (status == 1) {
+				rs.push_back(Player(id, username, elo));
+			}
+		}
+		sql = "SELECT * FROM account WHERE username not like '" + player + "'  AND elo in (select elo from account where username like '" + player + "')"; 
+		query.setCommandText(sql.c_str());
+		query.Execute();
+		while (query.FetchNext()) {
+			long id = query["id"].asLong();
+			string username = query["username"].asString().GetMultiByteChars();
+			long elo = query["elo"].asLong();
+			long status = query["status"].asLong();
+			if (status == 1) {
+				rs.push_back(Player(id, username, elo));
+			}
 		}
 		query.Close();
 	}

@@ -160,6 +160,13 @@ void clientDisconnect(Account *account) {
 	closesocket(account->perHandleData->socket);
 	database->updateStatus(account->username, 0);
 	delete account;
+
+	for (auto i = accounts.begin(); i != accounts.end(); i++) {
+		Account *acc = (*i);
+		if (acc->signInStatus != LOGGED) continue;
+		acc->send(listFriendToMessage(acc->username));
+		acc->send(listCanChallangeToMessage(acc->username));
+	}
 }
 
 
@@ -268,7 +275,13 @@ void solveLoginReq(Account *account, Message &request) {
 		response.content = reform(RES_LOGIN_SUCCESSFUL, SIZE_RESPONSE_CODE);
 
 		account->send(response); // send response
-		account->send(listFriendToMessage(account->username)); // send list friend
+
+		for (auto i = accounts.begin(); i != accounts.end(); i++) {
+			Account *acc = (*i);
+			if (acc->signInStatus != LOGGED) continue;
+			acc->send(listFriendToMessage(acc->username));
+			acc->send(listCanChallangeToMessage(acc->username));
+		}
 	}
 	else {
 		response.content = reform(RES_LOGIN_FAIL, SIZE_RESPONSE_CODE);
@@ -293,6 +306,12 @@ void solveLogoutReq(Account *account, Message &request) {
 		account->signInStatus = NOT_LOGGED;
 		database->updateStatus(account->username, 0);
 		response.content = reform(RES_LOGOUT_SUCCESSFUL, SIZE_RESPONSE_CODE);
+		for (auto i = accounts.begin(); i != accounts.end(); i++) {
+			Account *acc = (*i);
+			if (acc->signInStatus != LOGGED) continue;
+			acc->send(listFriendToMessage(acc->username));
+			acc->send(listCanChallangeToMessage(acc->username));
+		}
 	}
 
 	account->send(response);
@@ -406,7 +425,7 @@ void solveSendChallengeInvitationReq(Account *account, Message &request) {
 
 	Account *toAcc = findAccount(request.content);
 	
-	if (toAcc == NULL) {
+	if (toAcc == NULL || !database->checkValidChallenge(account->username, toAcc->username)) {
 		account->send(Message(RESPONSE, reform(RES_SEND_CHALLENGE_INVITATION_FAIL, SIZE_RESPONSE_CODE)));
 	}
 	else {
